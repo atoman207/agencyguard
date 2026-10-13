@@ -90,6 +90,10 @@ export const Sparkles = make("Suggestion", <path d="M10 4l1.800 5.200L17 11l-5.2
 // Actions
 export const Plus = make("Add", <path d="M12 5v14M5 12h14" />);
 export const Minus = make("Remove", <path d="M5 12h14" />);
+export const Pencil = make(
+  "Edit",
+  <path d="M13.5 6.5l4 4M4 20l1.2-4.4L16.5 4.3a1.8 1.8 0 0 1 2.5 0l.7.7a1.8 1.8 0 0 1 0 2.5L8.4 18.8Z" />,
+);
 export const Trash2 = make("Delete", <path d="M4.500 7h15M9.500 7V4.500h5V7M6.500 7l.8 12.500a1.500 1.500 0 0 0 1.500 1.400h6.400a1.500 1.500 0 0 0 1.500-1.400L17.500 7M10 11v6M14 11v6" />);
 export const Copy = make("Copy", <><rect x="8.500" y="8.500" width="12" height="12" rx="2" /><path d={COPY_BACK} /></>);
 export const CopyCheck = make("Duplicate", <><rect x="8.500" y="8.500" width="12" height="12" rx="2" /><path d={COPY_BACK} /><path d="M12 14.500l2 2 3.500-3.500" /></>);

@@ -236,11 +236,15 @@ function limitInput(form: FormData) {
 }
 
 export async function createLimitAction(_: ActionState, form: FormData): Promise<ActionState> {
-  return act("admin", "Limit added.", ({ org, user }, now) => createLimit(org, userActor(user), limitInput(form), now));
+  return act("admin", "Limit added.", ({ org, user }, now) => {
+    createLimit(org, userActor(user), limitInput(form), now);
+  });
 }
 
 export async function updateLimitAction(_: ActionState, form: FormData): Promise<ActionState> {
-  return act("admin", "Limit updated.", ({ org, user }, now) => updateLimit(org, userActor(user), str(form, "id"), limitInput(form), now));
+  return act("admin", "Limit updated.", ({ org, user }, now) => {
+    updateLimit(org, userActor(user), str(form, "id"), limitInput(form), now);
+  });
 }
 
 export async function toggleLimitAction(_: ActionState, form: FormData): Promise<ActionState> {
