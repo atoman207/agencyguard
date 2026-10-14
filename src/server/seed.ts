@@ -28,14 +28,23 @@ export const DEMO_USERS = [
   { name: "Maya Lama", email: "viewer@himalayanthreads.test", role: "viewer" as const },
 ];
 
-// Fixed sign-in accounts. They are written into the database on every request
-// that touches seeding (including every sign-in), so these emails and passwords
-// always work — locally and on Vercel. Set AGENTGUARD_SEED_ACCOUNTS=false to
-// switch them off. Change or remove them before storing real data.
-export const SEED_ACCOUNTS = [
-  { name: "Admin", email: "admin@gmail.com", password: "adminPASSWORD", role: "owner" as const },
-  { name: "User", email: "user@gmail.com", password: "userPASSWORD", role: "viewer" as const },
-];
+/** Sign-in accounts from env (with local defaults). Synced into the DB on every seeded request. */
+export function seedAccounts(): { name: string; email: string; password: string; role: "owner" | "viewer" }[] {
+  return [
+    {
+      name: "Admin",
+      email: (process.env.AGENTGUARD_ADMIN_EMAIL ?? "admin@gmail.com").trim().toLowerCase(),
+      password: process.env.AGENTGUARD_ADMIN_PASSWORD ?? "adminPASSWORD",
+      role: "owner",
+    },
+    {
+      name: "User",
+      email: (process.env.AGENTGUARD_USER_EMAIL ?? "user@gmail.com").trim().toLowerCase(),
+      password: process.env.AGENTGUARD_USER_PASSWORD ?? "userPASSWORD",
+      role: "viewer",
+    },
+  ];
+}
 
 type Globals = typeof globalThis & { __agDemoSeed?: Promise<void> };
 
@@ -94,7 +103,7 @@ async function ensureSeedAccounts(now: number): Promise<void> {
   }
   const org = await getOrg(orgId);
 
-  for (const account of SEED_ACCOUNTS) {
+  for (const account of seedAccounts()) {
     const existing = await get<{ id: string; name: string; role: string; org_id: string; password_hash: string }>(
       "SELECT id, name, role, org_id, password_hash FROM users WHERE email = ?",
       account.email,

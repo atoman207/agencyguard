@@ -4,14 +4,37 @@ import fs from "node:fs";
 import path from "node:path";
 import postgres, { type Sql } from "postgres";
 
-// Local: SQLite in .data/. Vercel (DATABASE_URL set): Supabase Postgres via the
-// transaction pooler. Callers always use async get/all/run/tx. Every query
-// still filters by org_id for customer separation.
+// Local: SQLite in .data/. Vercel: Supabase Postgres via DATABASE_URL (or the
+// POSTGRES_URL vars from the Vercel↔Supabase integration). Callers always use
+// async get/all/run/tx. Every query still filters by org_id for tenancy.
 
 export const DATA_DIR = process.env.AGENTGUARD_DATA_DIR ?? path.join(process.cwd(), ".data");
 
+/** Postgres connection string from any of the env names Vercel/Supabase use. */
+export function databaseUrl(): string | undefined {
+  const url =
+    process.env.DATABASE_URL?.trim() ||
+    process.env.POSTGRES_URL?.trim() ||
+    process.env.POSTGRES_PRISMA_URL?.trim() ||
+    process.env.POSTGRES_URL_NON_POOLING?.trim() ||
+    process.env.SUPABASE_DB_URL?.trim();
+  return url || undefined;
+}
+
 export function usesPostgres(): boolean {
-  return !!process.env.DATABASE_URL;
+  return !!databaseUrl();
+}
+
+function onServerless(): boolean {
+  return !!(process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME);
+}
+
+function assertSqliteAllowed(): void {
+  if (onServerless()) {
+    throw new Error(
+      "DATABASE_URL is missing on Vercel. Add it under Project Settings → Environment Variables: use the Supabase Transaction pooler URI (port 6543), then Redeploy. The Supabase URL/publishable/secret keys alone are not enough for login.",
+    );
+  }
 }
 
 const SCHEMA = `
@@ -306,8 +329,14 @@ function normalizeRow(row: Record<string, unknown>): Record<string, unknown> {
 
 function pg(): Sql {
   if (!g.__agPg) {
-    const url = process.env.DATABASE_URL;
-    if (!url) throw new Error("DATABASE_URL is not set.");
+    const url = databaseUrl();
+    if (!url) {
+      throw new Error(
+        onServerless()
+          ? "DATABASE_URL is missing on Vercel. Set it to the Supabase Transaction pooler URI (port 6543) and redeploy."
+          : "DATABASE_URL is not set.",
+      );
+    }
     g.__agPg = postgres(url, {
       prepare: false, // required for Supabase transaction pooler
       max: 1,
@@ -326,6 +355,11 @@ function pg(): Sql {
 }
 
 function sqliteDb(): DatabaseSync {
+  // Never touch the filesystem on Vercel — /var/task is read-only.
+  assertSqliteAllowed();
+  if (usesPostgres()) {
+    throw new Error("SQLite is not used when DATABASE_URL is set.");
+  }
   if (!g.__agDb) {
     fs.mkdirSync(DATA_DIR, { recursive: true });
     const conn = new DatabaseSync(path.join(DATA_DIR, "agentguard.db"));

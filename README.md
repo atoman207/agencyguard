@@ -103,9 +103,9 @@ Local development uses SQLite under `.data/`. Production on Vercel should set `D
 
 One SQL file sets up everything: [supabase/database.sql](supabase/database.sql). It creates the app tables (users, sessions, agents, events, …), the template catalog, RLS, and seed accounts / template data. Safe to re-run.
 
-1. Put the project URL, publishable key, secret key, and (for Vercel) `DATABASE_URL` in `.env.local` / the Vercel project (see `.env.example`).
-2. In the Supabase **SQL Editor**, paste and run [supabase/database.sql](supabase/database.sql).
-3. On Vercel, set `DATABASE_URL` to the Transaction pooler URL (port `6543`), plus `AGENTGUARD_MASTER_KEY` and `AGENTGUARD_PUBLIC_URL`. Redeploy.
+1. In the Supabase **SQL Editor**, paste and run [supabase/database.sql](supabase/database.sql) (tables + `admin@gmail.com` / `user@gmail.com`).
+2. Put env vars in `.env.local` and in the Vercel project (see `.env.example`). On Vercel you need **`DATABASE_URL`** (Transaction pooler, port `6543`) in addition to the Supabase URL/keys — without it, login tries SQLite and fails.
+3. Also set `AGENTGUARD_MASTER_KEY` and `AGENTGUARD_PUBLIC_URL`, then **Redeploy**.
 
 Template packs on the Rules page are read from Supabase with the publishable key. If unset or unreachable, the app uses the built-in copy in [src/lib/template-data.ts](src/lib/template-data.ts). `npm run supabase:check` verifies the connection; `npm run sql:build` regenerates the template data block inside `database.sql` from that TypeScript file.
 

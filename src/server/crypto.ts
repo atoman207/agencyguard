@@ -69,8 +69,14 @@ function masterKey(): Buffer {
     if (key.length !== 32) throw new Error("AGENTGUARD_MASTER_KEY must be 32 bytes, base64 encoded.");
     return (cachedMasterKey = key);
   }
-  if (process.env.NODE_ENV === "production" && process.env.AGENTGUARD_ALLOW_LOCAL_KEY !== "true") {
-    throw new Error("Set AGENTGUARD_MASTER_KEY before storing credentials in production.");
+  if (
+    process.env.NODE_ENV === "production" ||
+    process.env.VERCEL ||
+    process.env.AWS_LAMBDA_FUNCTION_NAME
+  ) {
+    throw new Error(
+      "Set AGENTGUARD_MASTER_KEY (32 bytes, base64) in the Vercel environment before storing credentials.",
+    );
   }
   const file = path.join(DATA_DIR, "master.key");
   if (!fs.existsSync(file)) {
