@@ -4,6 +4,7 @@ import { cookies } from "next/headers";
 import { connection } from "next/server";
 import { redirect } from "next/navigation";
 import { getOrg } from "./orgs";
+import { ensureSeeded } from "./seed";
 import { atLeast, createSession, destroySession, SESSION_DAYS, userForLiveSession, userForSession } from "./users";
 import type { Org, Role, User } from "@/lib/types";
 
@@ -19,10 +20,11 @@ export interface Session {
 /** The signed-in user, read once per request for a page and everything it renders. */
 export const getSession = cache(async (): Promise<Session | null> => {
   const token = (await cookies()).get(SESSION_COOKIE)?.value;
-  // Everything a signed-in page shows is live data from a synchronous database.
+  // Everything a signed-in page shows is live data from the in-memory store.
   // Waiting for the real request keeps it out of any prerendered or prefetched
   // shell, so a page never shows a stale copy of approvals or activity.
   await connection();
+  await ensureSeeded();
   if (!token) return null;
   const now = Date.now();
   const user = await userForSession(token, now);
@@ -41,6 +43,7 @@ export const getSession = cache(async (): Promise<Session | null> => {
 export async function readShellSession(): Promise<Pick<Session, "user" | "org"> | null> {
   const token = (await cookies()).get(SESSION_COOKIE)?.value;
   if (!token) return null;
+  await ensureSeeded();
   const user = await userForLiveSession(token);
   return user ? { user, org: await getOrg(user.org_id) } : null;
 }

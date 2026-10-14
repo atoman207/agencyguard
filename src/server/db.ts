@@ -1,41 +1,10 @@
 import "server-only";
 import { DatabaseSync, type SQLInputValue, type StatementSync } from "node:sqlite";
-import fs from "node:fs";
-import path from "node:path";
-import postgres, { type Sql } from "postgres";
 
-// Local: SQLite in .data/. Vercel: Supabase Postgres via DATABASE_URL (or the
-// POSTGRES_URL vars from the Vercel↔Supabase integration). Callers always use
-// async get/all/run/tx. Every query still filters by org_id for tenancy.
-
-export const DATA_DIR = process.env.AGENTGUARD_DATA_DIR ?? path.join(process.cwd(), ".data");
-
-/** Postgres connection string from any of the env names Vercel/Supabase use. */
-export function databaseUrl(): string | undefined {
-  const url =
-    process.env.DATABASE_URL?.trim() ||
-    process.env.POSTGRES_URL?.trim() ||
-    process.env.POSTGRES_PRISMA_URL?.trim() ||
-    process.env.POSTGRES_URL_NON_POOLING?.trim() ||
-    process.env.SUPABASE_DB_URL?.trim();
-  return url || undefined;
-}
-
-export function usesPostgres(): boolean {
-  return !!databaseUrl();
-}
-
-function onServerless(): boolean {
-  return !!(process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME);
-}
-
-function assertSqliteAllowed(): void {
-  if (onServerless()) {
-    throw new Error(
-      "DATABASE_URL is missing on Vercel. Add it under Project Settings → Environment Variables: use the Supabase Transaction pooler URI (port 6543), then Redeploy. The Supabase URL/publishable/secret keys alone are not enough for login.",
-    );
-  }
-}
+// In-process SQLite only — no Postgres, no on-disk database file.
+// State lives in memory for the life of the Node process (and is re-seeded on
+// each cold start). Callers use async get/all/run/tx; every query still filters
+// by org_id for tenancy.
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS organizations (
@@ -309,67 +278,14 @@ type Globals = typeof globalThis & {
   __agDb?: DatabaseSync;
   __agStatements?: Map<string, StatementSync>;
   __agTxDepth?: number;
-  __agPg?: Sql;
-  __agPgTx?: Sql | null;
 };
 const g = globalThis as Globals;
 
-function toPgParams(sql: string): string {
-  let i = 0;
-  return sql.replace(/\?/g, () => `$${++i}`);
-}
-
-function normalizeRow(row: Record<string, unknown>): Record<string, unknown> {
-  const out: Record<string, unknown> = {};
-  for (const [k, v] of Object.entries(row)) {
-    out[k] = typeof v === "bigint" ? Number(v) : v;
-  }
-  return out;
-}
-
-function pg(): Sql {
-  if (!g.__agPg) {
-    const url = databaseUrl();
-    if (!url) {
-      throw new Error(
-        onServerless()
-          ? "DATABASE_URL is missing on Vercel. Set it to the Supabase Transaction pooler URI (port 6543) and redeploy."
-          : "DATABASE_URL is not set.",
-      );
-    }
-    g.__agPg = postgres(url, {
-      prepare: false, // required for Supabase transaction pooler
-      max: 1,
-      idle_timeout: 20,
-      connect_timeout: 10,
-      // bigint (epoch milliseconds, counts, sums) and numeric come back as strings by
-      // default; the app does arithmetic on them, so read them as numbers like SQLite does.
-      types: {
-        bigint: { to: 20, from: [20], serialize: (x: unknown) => String(x), parse: (x: string) => Number(x) },
-        numeric: { to: 1700, from: [1700], serialize: (x: unknown) => String(x), parse: (x: string) => Number(x) },
-      },
-    });
-    g.__agPgTx = null;
-  }
-  return g.__agPgTx ?? g.__agPg;
-}
-
 function sqliteDb(): DatabaseSync {
-  // Never touch the filesystem on Vercel — /var/task is read-only.
-  assertSqliteAllowed();
-  if (usesPostgres()) {
-    throw new Error("SQLite is not used when DATABASE_URL is set.");
-  }
   if (!g.__agDb) {
-    fs.mkdirSync(DATA_DIR, { recursive: true });
-    const conn = new DatabaseSync(path.join(DATA_DIR, "agentguard.db"));
-    conn.exec("PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;");
+    const conn = new DatabaseSync(":memory:");
+    conn.exec("PRAGMA foreign_keys = ON;");
     conn.exec(SCHEMA);
-    try {
-      conn.exec("ALTER TABLE users ADD COLUMN avatar TEXT");
-    } catch {
-      /* already present */
-    }
     g.__agDb = conn;
     g.__agStatements = new Map();
     g.__agTxDepth = 0;
@@ -387,61 +303,30 @@ function sqliteStatement(sql: string): StatementSync {
   return st;
 }
 
-/** @deprecated Prefer async get/all/run. Kept for rare sync-only call sites during migration. */
+/** @deprecated Prefer async get/all/run. */
 export function db(): DatabaseSync {
-  if (usesPostgres()) throw new Error("db() is only available with local SQLite. Use get/all/run with DATABASE_URL.");
   return sqliteDb();
 }
 
 export async function all<T>(sql: string, ...params: SQLInputValue[]): Promise<T[]> {
-  if (usesPostgres()) {
-    const rows = await pg().unsafe(toPgParams(sql), params as never[]);
-    return rows.map((row) => normalizeRow(row as Record<string, unknown>) as T);
-  }
   return sqliteStatement(sql)
     .all(...params)
     .map((row) => ({ ...row })) as T[];
 }
 
 export async function get<T>(sql: string, ...params: SQLInputValue[]): Promise<T | undefined> {
-  if (usesPostgres()) {
-    const rows = await pg().unsafe(toPgParams(sql), params as never[]);
-    const row = rows[0] as Record<string, unknown> | undefined;
-    return row ? (normalizeRow(row) as T) : undefined;
-  }
   const row = sqliteStatement(sql).get(...params);
   return row ? ({ ...row } as T) : undefined;
 }
 
 export async function run(sql: string, ...params: SQLInputValue[]): Promise<number> {
-  if (usesPostgres()) {
-    const result = await pg().unsafe(toPgParams(sql), params as never[]);
-    return Number(result.count ?? 0);
-  }
   return Number(sqliteStatement(sql).run(...params).changes);
 }
 
-/**
- * Runs `fn` atomically. With Postgres, nested get/all/run inside `fn` use the
- * same transaction connection.
- */
+/** Runs `fn` atomically. Nested get/all/run inside `fn` share the same transaction. */
 export async function tx<T>(fn: () => Promise<T> | T): Promise<T> {
-  if (usesPostgres()) {
-    if (g.__agTxDepth! > 0) return (await fn()) as T;
-    return (await pg().begin(async (sql) => {
-      g.__agPgTx = sql as unknown as Sql;
-      g.__agTxDepth = 1;
-      try {
-        return (await fn()) as T;
-      } finally {
-        g.__agPgTx = null;
-        g.__agTxDepth = 0;
-      }
-    })) as T;
-  }
-
   const conn = sqliteDb();
-    if (g.__agTxDepth! > 0) return (await fn()) as T;
+  if (g.__agTxDepth! > 0) return (await fn()) as T;
   conn.exec("BEGIN IMMEDIATE");
   g.__agTxDepth = 1;
   try {

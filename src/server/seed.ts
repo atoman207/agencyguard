@@ -6,7 +6,6 @@ import { decide, reportCompletion, type ActionRequest } from "./engine";
 import { insertEvent, updateEvent } from "./events";
 import { decideAndExecute, executeEvent } from "./execution";
 import { BUILTIN_DEMO, saveMcpServer } from "./mcp";
-import { SYSTEM } from "./audit";
 import { DEFAULT_SETTINGS, getOrg, saveSettings } from "./orgs";
 import { checkResponse } from "./response-check";
 import { installTemplate } from "./templates";
@@ -28,16 +27,18 @@ export const DEMO_USERS = [
   { name: "Maya Lama", email: "viewer@himalayanthreads.test", role: "viewer" as const },
 ];
 
-/** Sign-in accounts from env (with local defaults). Synced into the DB on every seeded request. */
-export function seedAccounts(): { name: string; email: string; password: string; role: "owner" | "viewer" }[] {
+/** Sign-in accounts (defaults match AGENTGUARD_* env names). Stable ids keep signed cookies valid across cold starts. */
+export function seedAccounts(): { id: string; name: string; email: string; password: string; role: "owner" | "viewer" }[] {
   return [
     {
+      id: "usr_seed_admin",
       name: "Admin",
       email: (process.env.AGENTGUARD_ADMIN_EMAIL ?? "admin@gmail.com").trim().toLowerCase(),
       password: process.env.AGENTGUARD_ADMIN_PASSWORD ?? "adminPASSWORD",
       role: "owner",
     },
     {
+      id: "usr_seed_user",
       name: "User",
       email: (process.env.AGENTGUARD_USER_EMAIL ?? "user@gmail.com").trim().toLowerCase(),
       password: process.env.AGENTGUARD_USER_PASSWORD ?? "userPASSWORD",
@@ -46,13 +47,14 @@ export function seedAccounts(): { name: string; email: string; password: string;
   ];
 }
 
+/** @deprecated Use seedAccounts() */
+export const SEED_ACCOUNTS = seedAccounts();
+
 type Globals = typeof globalThis & { __agDemoSeed?: Promise<void> };
 
 export function seedEnabled(): boolean {
-  const flag = process.env.AGENTGUARD_SEED_DEMO;
-  if (flag) return flag === "true";
-  // Demo accounts have a published password, so they are never created in production by default.
-  return process.env.NODE_ENV !== "production";
+  // Always load the demo workspace so the site looks fully populated with no external DB.
+  return process.env.AGENTGUARD_SEED_DEMO !== "false";
 }
 
 export function seedAccountsEnabled(): boolean {
@@ -63,7 +65,6 @@ export async function ensureSeeded(): Promise<void> {
   const g = globalThis as Globals;
   if (!g.__agDemoSeed) {
     g.__agDemoSeed = (async () => {
-      // The demo workspace (a week of activity) is development-only by default.
       if (seedEnabled() && !(await get("SELECT 1 AS x FROM organizations LIMIT 1"))) {
         try {
           await seed(Date.now());
@@ -77,8 +78,6 @@ export async function ensureSeeded(): Promise<void> {
     });
   }
   await g.__agDemoSeed;
-  // Seed accounts run on every call so the published passwords stay correct even
-  // if someone changed them in the database, or a previous insert only partly ran.
   if (seedAccountsEnabled()) {
     try {
       await ensureSeedAccounts(Date.now());
@@ -90,41 +89,61 @@ export async function ensureSeeded(): Promise<void> {
 
 /**
  * Inserts or updates every seed account so the published emails and passwords
- * always sign in. They join the demo workspace when there is one, otherwise the
- * first workspace, otherwise a new "AgentGuard" workspace is created.
+ * always sign in. Fixed ids so signed session cookies work after a cold start.
  */
 async function ensureSeedAccounts(now: number): Promise<void> {
   const demoOwner = await get<{ org_id: string }>("SELECT org_id FROM users WHERE email = ?", DEMO_USERS[0].email);
   const anyOrg = demoOwner ?? (await get<{ org_id: string }>("SELECT id AS org_id FROM organizations ORDER BY created_at ASC LIMIT 1"));
   let orgId = anyOrg?.org_id;
   if (!orgId) {
-    orgId = newId("org");
+    orgId = "org_agentguard";
     await run("INSERT INTO organizations (id, name, settings, created_at) VALUES (?, ?, ?, ?)", orgId, "AgentGuard", JSON.stringify(DEFAULT_SETTINGS), now);
   }
   const org = await getOrg(orgId);
 
   for (const account of seedAccounts()) {
-    const existing = await get<{ id: string; name: string; role: string; org_id: string; password_hash: string }>(
+    const byEmail = await get<{ id: string; name: string; role: string; org_id: string; password_hash: string }>(
       "SELECT id, name, role, org_id, password_hash FROM users WHERE email = ?",
       account.email,
     );
-    if (existing) {
+    if (byEmail) {
       const same =
-        existing.name === account.name &&
-        existing.role === account.role &&
-        existing.org_id === org.id &&
-        verifyPassword(account.password, existing.password_hash);
+        byEmail.name === account.name &&
+        byEmail.role === account.role &&
+        byEmail.org_id === org.id &&
+        verifyPassword(account.password, byEmail.password_hash);
       if (same) continue;
       await run(
-        "UPDATE users SET name = ?, password_hash = ?, role = ?, org_id = ? WHERE id = ?",
+        "UPDATE users SET name = ?, password_hash = ?, role = ?, org_id = ? WHERE email = ?",
         account.name,
         hashPassword(account.password),
         account.role,
         org.id,
-        existing.id,
+        account.email,
+      );
+      continue;
+    }
+    if (await get("SELECT 1 AS x FROM users WHERE id = ?", account.id)) {
+      await run(
+        "UPDATE users SET email = ?, name = ?, password_hash = ?, role = ?, org_id = ? WHERE id = ?",
+        account.email,
+        account.name,
+        hashPassword(account.password),
+        account.role,
+        org.id,
+        account.id,
       );
     } else {
-      await addMember(org, SYSTEM, { name: account.name, email: account.email, role: account.role, password: account.password }, now);
+      await run(
+        "INSERT INTO users (id, org_id, email, name, password_hash, role, avatar, created_at) VALUES (?, ?, ?, ?, ?, ?, NULL, ?)",
+        account.id,
+        org.id,
+        account.email,
+        account.name,
+        hashPassword(account.password),
+        account.role,
+        now,
+      );
     }
   }
 }

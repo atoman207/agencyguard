@@ -1,3 +1,0 @@
--- Deprecated: use supabase/database.sql instead.
--- That single file creates the app tables, template catalog, RLS, and seed accounts.
--- (Supabase SQL Editor does not support \i — open database.sql and run it there.)

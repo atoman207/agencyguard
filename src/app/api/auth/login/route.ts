@@ -9,12 +9,7 @@ export const POST = route(async (request) => {
   try {
     user = await checkPassword(String(body.email ?? ""), String(body.password ?? ""), Date.now());
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Sign-in failed.";
-    // Misconfiguration (missing DATABASE_URL on Vercel, etc.) is not a bad password.
-    if (/DATABASE_URL|AGENTGUARD_MASTER_KEY|Vercel/i.test(message)) {
-      throw new RequestError(message, 503, "misconfigured");
-    }
-    throw new RequestError(message, 401, "invalid_credentials");
+    throw new RequestError(err instanceof Error ? err.message : "Sign-in failed.", 401, "invalid_credentials");
   }
   await startSession(user.id);
   return Response.json({ user });

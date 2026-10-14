@@ -6,14 +6,30 @@ This is the MVP described by the three documents in [docs/](docs/), built as one
 
 ## Run it
 
-Needs Node.js 24 or newer (it uses the SQLite engine built into Node, so there is nothing else to install).
+Needs Node.js 24 or newer (it uses the SQLite engine built into Node, in memory — nothing else to install).
 
 ```bash
 npm install
 npm run dev
 ```
 
-Open <http://127.0.0.1:3000>. On the first sign-in a demo workspace is created: a fictional shop, "Himalayan Threads", with four agents and a week of activity.
+Open <http://127.0.0.1:3000>. On first request a demo workspace is created in memory: a fictional shop, "Himalayan Threads", with four agents and a week of activity. There is no external database and no `.env` file.
+
+| Account | Role | Email | Password |
+|---|---|---|---|
+| Admin | Owner | admin@gmail.com | `adminPASSWORD` |
+| User | Viewer | user@gmail.com | `userPASSWORD` |
+
+Optional overrides (process environment only — no env files are shipped):
+
+| Variable | Default |
+|---|---|
+| `AGENTGUARD_ADMIN_EMAIL` | `admin@gmail.com` |
+| `AGENTGUARD_ADMIN_PASSWORD` | `adminPASSWORD` |
+| `AGENTGUARD_USER_EMAIL` | `user@gmail.com` |
+| `AGENTGUARD_USER_PASSWORD` | `userPASSWORD` |
+
+Demo accounts (same workspace):
 
 | Demo account | Role | Email |
 |---|---|---|
@@ -22,35 +38,26 @@ Open <http://127.0.0.1:3000>. On the first sign-in a demo workspace is created: 
 | Sita Gurung | Approver | manager@himalayanthreads.test |
 | Maya Lama | Viewer | viewer@himalayanthreads.test |
 
-Password for all four: `namaste-agentguard`. The login page fills these in for you.
+Password for the four demo accounts: `namaste-agentguard`.
 
-Two more accounts are always kept in the database (upserted on every sign-in, and inserted by [supabase/database.sql](supabase/database.sql)):
-
-| Account | Role | Email | Password |
-|---|---|---|---|
-| Admin | Owner | admin@gmail.com | `adminPASSWORD` |
-| User | Viewer | user@gmail.com | `userPASSWORD` |
-
-They live in `SEED_ACCOUNTS` in [src/server/seed.ts](src/server/seed.ts). Set `AGENTGUARD_SEED_ACCOUNTS=false` to stop restoring them.
-
-The fastest tour is **Playground**: twelve failure cases from the product document (the $450 refund, a retry storm, split refunds, a changed amount after approval, an unknown tool, a runaway loop, a risky reply, hidden instructions in a web page, the kill switch) run against the real decision engine.
+The fastest tour is **Playground**: twelve failure cases from the product document run against the real decision engine.
 
 ### Two things to know before exposing it
 
-- `npm run dev` binds to `127.0.0.1` only. The demo accounts have a published password, so do not put the dev server on a public address. To allow other machines, run `npx next dev --hostname 0.0.0.0` on a trusted network.
-- All data lives in `.data/` (SQLite database and, in development, the vault master key). Delete the folder to start again with fresh demo data.
+- `npm run dev` binds to `127.0.0.1` only. Published passwords are for demos; do not put the server on a public address without changing them.
+- All workspace data lives in process memory and is re-seeded on each cold start. Sessions use signed cookies so Admin/User sign-in still works after a restart.
 
 ## Tests
 
 ```bash
 npm run dev          # in one terminal
-npm run test:e2e     # in another: 74 checks against the running server
+npm run test:e2e     # in another: checks against the running server
 npm run test:e2e -- --slow   # also waits out a one-minute approval timeout
 npm run typecheck
 npm run lint
 ```
 
-The end-to-end suite signs up a fresh workspace each run, so it never touches the demo data. It covers the approval loopholes the roadmap names: changed parameters, retries, split actions, unauthorized approvers, and requests that are asked again after a rejection.
+The end-to-end suite signs up a fresh workspace each run, so it never depends on the demo seed alone. It covers the approval loopholes the roadmap names: changed parameters, retries, split actions, unauthorized approvers, and requests that are asked again after a rejection.
 
 ## What is built
 
@@ -90,40 +97,18 @@ The roadmap lists a separate backend, Go gateways, PostgreSQL, Redis, Temporal, 
 
 | Roadmap | Here |
 |---|---|
-| PostgreSQL with row-level security | Local SQLite, or Supabase Postgres when `DATABASE_URL` is set; every query filters by organization |
+| PostgreSQL with row-level security | In-memory SQLite; every query filters by organization |
 | Redis counters | SQL sums inside a transaction |
 | Temporal / durable queue | Timeouts are applied when approvals are read or decided; there is no background worker |
 | OPA or Cedar | A small condition evaluator ([src/lib/rule-fields.ts](src/lib/rule-fields.ts)) |
-| Clerk / Auth0 / WorkOS | Email and password with scrypt hashes and server-side sessions |
-| Cloud KMS envelope encryption | Envelope encryption with a master key from `AGENTGUARD_MASTER_KEY` |
+| Clerk / Auth0 / WorkOS | Email and password with scrypt hashes and signed session cookies |
+| Cloud KMS envelope encryption | Envelope encryption with a built-in or `AGENTGUARD_MASTER_KEY` master key |
 
-Local development uses SQLite under `.data/`. Production on Vercel should set `DATABASE_URL` to Supabase’s **Transaction pooler** so sessions and users are shared across serverless instances.
-
-## Supabase
-
-One SQL file sets up everything: [supabase/database.sql](supabase/database.sql). It creates the app tables (users, sessions, agents, events, …), the template catalog, RLS, and seed accounts / template data. Safe to re-run.
-
-1. In the Supabase **SQL Editor**, paste and run [supabase/database.sql](supabase/database.sql) (tables + `admin@gmail.com` / `user@gmail.com`).
-2. Put env vars in `.env.local` and in the Vercel project (see `.env.example`). On Vercel you need **`DATABASE_URL`** (Transaction pooler, port `6543`) in addition to the Supabase URL/keys — without it, login tries SQLite and fails.
-3. Also set `AGENTGUARD_MASTER_KEY` and `AGENTGUARD_PUBLIC_URL`, then **Redeploy**.
-
-Template packs on the Rules page are read from Supabase with the publishable key. If unset or unreachable, the app uses the built-in copy in [src/lib/template-data.ts](src/lib/template-data.ts). `npm run supabase:check` verifies the connection; `npm run sql:build` regenerates the template data block inside `database.sql` from that TypeScript file.
+Template packs on the Rules page come from [src/lib/template-data.ts](src/lib/template-data.ts).
 
 ## Icons and look
 
 All icons come from one set, [src/components/icons.tsx](src/components/icons.tsx): one 24-pixel grid, one stroke weight, one colour. Import from `@/components/icons`; to add one, draw it on the same grid. The interface is white throughout, with the brand colours kept for actions and statuses.
-
-## Configuration
-
-Copy `.env.example` to `.env.local` and adjust.
-
-| Variable | Purpose |
-|---|---|
-| `DATABASE_URL` | Supabase Postgres (Transaction pooler). When set, app state uses Postgres; when unset, local SQLite |
-| `AGENTGUARD_MASTER_KEY` | 32 random bytes, base64. Wraps the vault's data keys. Required in production |
-| `AGENTGUARD_PUBLIC_URL` | The address people use, for links in notifications (your Vercel URL in production) |
-| `AGENTGUARD_DATA_DIR` | SQLite directory when `DATABASE_URL` is unset. Default `.data` |
-| `AGENTGUARD_SEED_DEMO` | `true` or `false`. Demo data is on in development and off in production by default |
 
 ## Code map
 
@@ -138,8 +123,5 @@ Copy `.env.example` to `.env.local` and adjust.
 | [src/server/scenarios.ts](src/server/scenarios.ts), [src/server/seed.ts](src/server/seed.ts) | Playground scenarios and demo data |
 | [src/lib/catalog.ts](src/lib/catalog.ts) | The action catalog: standard action types and default risk |
 | [src/app/v1/](src/app/v1/), [src/app/gateway/](src/app/gateway/), [src/app/mcp/](src/app/mcp/) | Agent-facing API routes |
-| [src/app/(app)/](src/app/(app)/) | The control center pages |
-| [src/app/globals.css](src/app/globals.css), [src/components/brand.tsx](src/components/brand.tsx) | The design language: the colours of Nepal, Dhaka weave and the Himalaya |
-| [scripts/e2e.mjs](scripts/e2e.mjs) | End-to-end tests |
-
-This project uses Next.js 16 with Cache Components. Read [AGENTS.md](AGENTS.md) before changing page structure: signed-in pages read the session first and each page folder has its own `loading.tsx`.
+| [src/app/(app)/](src/app/(app)/) | The control-center pages |
+| [sdk/typescript/](sdk/typescript/) | The TypeScript SDK |

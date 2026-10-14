@@ -8,15 +8,10 @@
     "start": "next start",
     "lint": "eslint",
     "test:e2e": "node scripts/e2e.mjs",
-    "typecheck": "tsc --noEmit",
-    "sql:build": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/build-sql.mjs",
-    "supabase:check": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --env-file=.env.local scripts/supabase.mjs check",
-    "supabase:seed": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --env-file=.env.local scripts/supabase.mjs seed"
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.117.3",
     "next": "16.4.0",
-    "postgres": "^3.4.9",
     "react": "19.3.0",
     "react-dom": "19.3.0",
     "server-only": "^0.0.1"

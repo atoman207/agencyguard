@@ -1,8 +1,5 @@
 import "server-only";
 import crypto from "node:crypto";
-import fs from "node:fs";
-import path from "node:path";
-import { DATA_DIR } from "./db";
 
 export function newId(prefix: string): string {
   return `${prefix}_${crypto.randomBytes(9).toString("base64url")}`;
@@ -56,34 +53,25 @@ export function randomToken(bytes = 32): string {
 
 // --- vault encryption --------------------------------------------------------
 // Envelope encryption: each secret gets its own data key, and the data key is
-// wrapped by a master key. In production the master key belongs in a cloud KMS;
-// here it comes from AGENTGUARD_MASTER_KEY, or a generated local file in dev.
+// wrapped by a master key. With no external config, a stable built-in key is
+// used so demo vault rows survive process restarts in the same deployment.
 
 let cachedMasterKey: Buffer | null = null;
 
+/** Stable secret for signing session cookies (and default vault wrapping). */
+export function appSecret(): string {
+  return process.env.AGENTGUARD_MASTER_KEY?.trim() || "agentguard-inmemory-v1";
+}
+
 function masterKey(): Buffer {
   if (cachedMasterKey) return cachedMasterKey;
-  const fromEnv = process.env.AGENTGUARD_MASTER_KEY;
+  const fromEnv = process.env.AGENTGUARD_MASTER_KEY?.trim();
   if (fromEnv) {
     const key = Buffer.from(fromEnv, "base64");
-    if (key.length !== 32) throw new Error("AGENTGUARD_MASTER_KEY must be 32 bytes, base64 encoded.");
-    return (cachedMasterKey = key);
+    if (key.length === 32) return (cachedMasterKey = key);
   }
-  if (
-    process.env.NODE_ENV === "production" ||
-    process.env.VERCEL ||
-    process.env.AWS_LAMBDA_FUNCTION_NAME
-  ) {
-    throw new Error(
-      "Set AGENTGUARD_MASTER_KEY (32 bytes, base64) in the Vercel environment before storing credentials.",
-    );
-  }
-  const file = path.join(DATA_DIR, "master.key");
-  if (!fs.existsSync(file)) {
-    fs.mkdirSync(DATA_DIR, { recursive: true });
-    fs.writeFileSync(file, crypto.randomBytes(32).toString("base64"), { mode: 0o600 });
-  }
-  return (cachedMasterKey = Buffer.from(fs.readFileSync(file, "utf8").trim(), "base64"));
+  // Deterministic 32 bytes from the app secret — no files, no env required.
+  return (cachedMasterKey = crypto.createHash("sha256").update(appSecret()).digest());
 }
 
 function seal(key: Buffer, plaintext: Buffer): string {

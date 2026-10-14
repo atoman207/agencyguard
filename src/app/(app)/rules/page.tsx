@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { Check, Database, LayoutTemplate, ListChecks, Plus, Trash2 } from "@/components/icons";
+import { Check, LayoutTemplate, ListChecks, Plus, Trash2 } from "@/components/icons";
 import { deleteRuleAction, installTemplateAction, toggleRuleAction, uninstallTemplateAction } from "@/app/actions";
 import { AutoSubmitSwitch } from "@/components/controls";
 import { ActionForm, SubmitButton } from "@/components/forms";
@@ -108,11 +108,7 @@ export default async function RulesPage() {
           <LayoutTemplate className="h-5 w-5 text-himal-700" />
           Template packs
         </h2>
-        <span title={catalog.note}>
-          <Badge tone={catalog.source === "supabase" ? "good" : "neutral"} icon={catalog.source === "supabase" ? <Database className="h-3.5 w-3.5" /> : undefined}>
-            {catalog.source === "supabase" ? "Live from Supabase" : "Built-in copy"}
-          </Badge>
-        </span>
+        <Badge tone="neutral">Built-in packs</Badge>
       </div>
       <div className="grid gap-5 md:grid-cols-2">
         {catalog.packs.map((pack) => (

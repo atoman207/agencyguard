@@ -1,6 +1,7 @@
 import "server-only";
+import { timingSafeEqual } from "node:crypto";
 import { all, get, run, tx } from "./db";
-import { hashPassword, newId, randomToken, sha256, verifyPassword } from "./crypto";
+import { appSecret, hashPassword, hmac, newId, randomToken, sha256, verifyPassword } from "./crypto";
 import { audit, type Actor } from "./audit";
 import { DEFAULT_SETTINGS } from "./orgs";
 import type { Org, Role, User } from "@/lib/types";
@@ -115,27 +116,43 @@ export async function checkPassword(email: string, password: string, now: number
   return (await getUser(row.id))!;
 }
 
+/**
+ * Signed cookie session (userId.expiresAt.hmac). No database round-trip, so
+ * sign-in survives in-memory process restarts as long as seed user ids are fixed.
+ */
 export async function createSession(userId: string, now: number): Promise<{ token: string; expiresAt: number }> {
-  const token = randomToken();
   const expiresAt = now + SESSION_DAYS * 86_400_000;
-  await run("INSERT INTO sessions (token_hash, user_id, created_at, expires_at) VALUES (?, ?, ?, ?)", sha256(token), userId, now, expiresAt);
+  const body = `${userId}.${expiresAt}`;
+  const token = `${body}.${hmac(appSecret(), body)}`;
   return { token, expiresAt };
 }
 
+function parseSignedSession(token: string, now: number): string | undefined {
+  const parts = token.split(".");
+  if (parts.length !== 3) return undefined;
+  const [userId, expStr, sig] = parts;
+  const expiresAt = Number(expStr);
+  if (!userId || !Number.isFinite(expiresAt) || expiresAt < now) return undefined;
+  const body = `${userId}.${expiresAt}`;
+  const expected = hmac(appSecret(), body);
+  const a = Buffer.from(sig);
+  const b = Buffer.from(expected);
+  if (a.length !== b.length || !timingSafeEqual(a, b)) return undefined;
+  return userId;
+}
+
 export async function userForSession(token: string, now: number): Promise<User | undefined> {
-  const row = await get<{ user_id: string; expires_at: number }>("SELECT user_id, expires_at FROM sessions WHERE token_hash = ?", sha256(token));
-  if (!row || row.expires_at < now) return undefined;
-  return await getUser(row.user_id);
+  const userId = parseSignedSession(token, now);
+  return userId ? await getUser(userId) : undefined;
 }
 
-/** Like `userForSession`, but checks expiry against the database clock, for callers that must not read the time themselves. */
+/** Like `userForSession`, but checks expiry against the clock, for callers that must not read the time themselves. */
 export async function userForLiveSession(token: string): Promise<User | undefined> {
-  const row = await get<{ user_id: string }>("SELECT user_id FROM sessions WHERE token_hash = ? AND expires_at > ?", sha256(token), Date.now());
-  return row ? await getUser(row.user_id) : undefined;
+  return userForSession(token, Date.now());
 }
 
-export async function destroySession(token: string): Promise<void> {
-  await run("DELETE FROM sessions WHERE token_hash = ?", sha256(token));
+export async function destroySession(_token: string): Promise<void> {
+  // Cookie is cleared by the caller; signed tokens expire on their own.
 }
 
 // --- organization API keys ------------------------------------------------------
