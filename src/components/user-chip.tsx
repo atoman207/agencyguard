@@ -15,16 +15,18 @@ export function UserChip({
   subtitle?: string;
 }) {
   const src = avatarForUser(user);
+  const isDataUrl = src.startsWith("data:");
+  const avatarClass = "shrink-0 rounded-full object-cover ring-2 ring-white";
+  const avatarStyle = { width: size, height: size };
   const chip = (
     <span className="inline-flex min-w-0 items-center gap-2.5">
-      <Image
-        src={src}
-        alt=""
-        width={size}
-        height={size}
-        className="shrink-0 rounded-full object-cover ring-2 ring-white"
-        style={{ width: size, height: size }}
-      />
+      {isDataUrl ? (
+        // next/image does not allow data URLs without a custom loader.
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={src} alt="" width={size} height={size} className={avatarClass} style={avatarStyle} />
+      ) : (
+        <Image src={src} alt="" width={size} height={size} className={avatarClass} style={avatarStyle} />
+      )}
       <span className="min-w-0 leading-tight">
         <span className="block truncate text-sm font-semibold text-ink">{user.name}</span>
         {subtitle ? <span className="block truncate text-xs text-ink-muted">{subtitle}</span> : null}

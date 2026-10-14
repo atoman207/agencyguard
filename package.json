@@ -9,6 +9,7 @@
     "lint": "eslint",
     "test:e2e": "node scripts/e2e.mjs",
     "typecheck": "tsc --noEmit",
+    "sql:build": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/build-sql.mjs",
     "supabase:check": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --env-file=.env.local scripts/supabase.mjs check",
     "supabase:seed": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --env-file=.env.local scripts/supabase.mjs seed"
   },

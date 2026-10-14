@@ -1,6 +1,7 @@
 import "server-only";
 import fs from "node:fs";
 import path from "node:path";
+import { usesPostgres } from "./db";
 
 const ALLOWED = new Map([
   ["image/jpeg", "jpg"],
@@ -19,12 +20,27 @@ export function assertAvatarFile(file: File): string {
   return ext;
 }
 
-/** Saves an uploaded avatar under public/avatars and returns its public URL path. */
+function serverlessFilesystem(): boolean {
+  return usesPostgres() || process.env.VERCEL === "1";
+}
+
+/**
+ * Returns a value to store in `users.avatar`.
+ * Locally: writes under public/avatars and returns a path.
+ * On Vercel / Postgres: returns a data URL (read-only filesystem).
+ */
 export async function saveAvatarFile(userId: string, file: File): Promise<string> {
   const ext = assertAvatarFile(file);
+  const bytes = Buffer.from(await file.arrayBuffer());
+
+  if (serverlessFilesystem()) {
+    const mime = [...ALLOWED.entries()].find(([, e]) => e === ext)?.[0] ?? file.type;
+    return `data:${mime};base64,${bytes.toString("base64")}`;
+  }
+
   const dir = path.join(process.cwd(), "public", "avatars");
   fs.mkdirSync(dir, { recursive: true });
   const filename = `${userId}.${ext}`;
-  fs.writeFileSync(path.join(dir, filename), Buffer.from(await file.arrayBuffer()));
+  fs.writeFileSync(path.join(dir, filename), bytes);
   return `/avatars/${filename}`;
 }

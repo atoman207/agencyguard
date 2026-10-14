@@ -24,14 +24,14 @@ Open <http://127.0.0.1:3000>. On the first sign-in a demo workspace is created: 
 
 Password for all four: `namaste-agentguard`. The login page fills these in for you.
 
-Two more accounts are stored as seed data in the same workspace (added on first run, or the next sign-in on an existing database), with the same development-only rule:
+Two more accounts are always kept in the database (upserted on every sign-in, and inserted by [supabase/database.sql](supabase/database.sql)):
 
 | Account | Role | Email | Password |
 |---|---|---|---|
-| Admin | Admin | admin@gmail.com | `adminPASSWORD` |
+| Admin | Owner | admin@gmail.com | `adminPASSWORD` |
 | User | Viewer | user@gmail.com | `userPASSWORD` |
 
-They live in `SEED_ACCOUNTS` in [src/server/seed.ts](src/server/seed.ts). Change the role there if the "User" account should be able to do more than read.
+They live in `SEED_ACCOUNTS` in [src/server/seed.ts](src/server/seed.ts). Set `AGENTGUARD_SEED_ACCOUNTS=false` to stop restoring them.
 
 The fastest tour is **Playground**: twelve failure cases from the product document (the $450 refund, a retry storm, split refunds, a changed amount after approval, an unknown tool, a runaway loop, a risky reply, hidden instructions in a web page, the kill switch) run against the real decision engine.
 
@@ -90,26 +90,24 @@ The roadmap lists a separate backend, Go gateways, PostgreSQL, Redis, Temporal, 
 
 | Roadmap | Here |
 |---|---|
-| PostgreSQL with row-level security | SQLite (`node:sqlite`); every query filters by organization |
-| Redis counters | SQL sums inside one synchronous transaction |
+| PostgreSQL with row-level security | Local SQLite, or Supabase Postgres when `DATABASE_URL` is set; every query filters by organization |
+| Redis counters | SQL sums inside a transaction |
 | Temporal / durable queue | Timeouts are applied when approvals are read or decided; there is no background worker |
 | OPA or Cedar | A small condition evaluator ([src/lib/rule-fields.ts](src/lib/rule-fields.ts)) |
 | Clerk / Auth0 / WorkOS | Email and password with scrypt hashes and server-side sessions |
 | Cloud KMS envelope encryption | Envelope encryption with a master key from `AGENTGUARD_MASTER_KEY` |
 
-Because the database is a local file and limits rely on one process, run a single instance. It is not ready for serverless hosting.
+Local development uses SQLite under `.data/`. Production on Vercel should set `DATABASE_URL` to Supabase’s **Transaction pooler** so sessions and users are shared across serverless instances.
 
-## Supabase (template catalog)
+## Supabase
 
-The template packs (ready-made rules and limits, shown under Rules) are read from Supabase. If Supabase is unset or unreachable, the app uses the identical built-in copy in [src/lib/template-data.ts](src/lib/template-data.ts), and the Rules page says which one is in use. Workspace data (agents, events, approvals, audit) stays in the local SQLite database: the decision engine depends on synchronous transactions that a network database cannot give it.
+One SQL file sets up everything: [supabase/database.sql](supabase/database.sql). It creates the app tables (users, sessions, agents, events, …), the template catalog, RLS, and seed accounts / template data. Safe to re-run.
 
-One-time setup:
+1. Put the project URL, publishable key, secret key, and (for Vercel) `DATABASE_URL` in `.env.local` / the Vercel project (see `.env.example`).
+2. In the Supabase **SQL Editor**, paste and run [supabase/database.sql](supabase/database.sql).
+3. On Vercel, set `DATABASE_URL` to the Transaction pooler URL (port `6543`), plus `AGENTGUARD_MASTER_KEY` and `AGENTGUARD_PUBLIC_URL`. Redeploy.
 
-1. Put the project URL, publishable key and secret key in `.env.local` (see `.env.example`).
-2. In the Supabase dashboard open **SQL Editor**, paste [supabase/schema.sql](supabase/schema.sql) and run it. It creates three tables with row-level security: anyone may read, nobody but the secret key may write.
-3. `npm run supabase:seed` writes the packs. `npm run supabase:check` verifies the connection, that the publishable key can read and cannot write, and that the catalog matches the built-in copy.
-
-The running app uses only the publishable key. The secret key is used by the seed script alone and must never reach a browser.
+Template packs on the Rules page are read from Supabase with the publishable key. If unset or unreachable, the app uses the built-in copy in [src/lib/template-data.ts](src/lib/template-data.ts). `npm run supabase:check` verifies the connection; `npm run sql:build` regenerates the template data block inside `database.sql` from that TypeScript file.
 
 ## Icons and look
 
@@ -121,9 +119,10 @@ Copy `.env.example` to `.env.local` and adjust.
 
 | Variable | Purpose |
 |---|---|
+| `DATABASE_URL` | Supabase Postgres (Transaction pooler). When set, app state uses Postgres; when unset, local SQLite |
 | `AGENTGUARD_MASTER_KEY` | 32 random bytes, base64. Wraps the vault's data keys. Required in production |
-| `AGENTGUARD_PUBLIC_URL` | The address people use, for links in notifications |
-| `AGENTGUARD_DATA_DIR` | Where the database lives. Default `.data` |
+| `AGENTGUARD_PUBLIC_URL` | The address people use, for links in notifications (your Vercel URL in production) |
+| `AGENTGUARD_DATA_DIR` | SQLite directory when `DATABASE_URL` is unset. Default `.data` |
 | `AGENTGUARD_SEED_DEMO` | `true` or `false`. Demo data is on in development and off in production by default |
 
 ## Code map

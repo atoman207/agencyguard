@@ -1,0 +1,3 @@
+-- Deprecated. Use supabase/database.sql instead.
+-- That single file creates the app tables, template catalog, RLS, and seed accounts.
+-- Open database.sql in the Supabase SQL Editor and run it.

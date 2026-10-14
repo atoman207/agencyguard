@@ -313,6 +313,12 @@ function pg(): Sql {
       max: 1,
       idle_timeout: 20,
       connect_timeout: 10,
+      // bigint (epoch milliseconds, counts, sums) and numeric come back as strings by
+      // default; the app does arithmetic on them, so read them as numbers like SQLite does.
+      types: {
+        bigint: { to: 20, from: [20], serialize: (x: unknown) => String(x), parse: (x: string) => Number(x) },
+        numeric: { to: 1700, from: [1700], serialize: (x: unknown) => String(x), parse: (x: string) => Number(x) },
+      },
     });
     g.__agPgTx = null;
   }

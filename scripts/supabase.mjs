@@ -24,7 +24,7 @@ const fail = (message) => {
 };
 const ok = (message) => console.log(`  ok  ${message}`);
 
-const SETUP_HINT = "The template tables do not exist yet. Open the Supabase dashboard > SQL Editor, paste the contents of supabase/schema.sql and run it, then run this again.";
+const SETUP_HINT = "The template tables do not exist yet. Open the Supabase dashboard > SQL Editor, paste the contents of supabase/database.sql and run it, then run this again.";
 const missingTable = (error) => error && (error.code === "PGRST205" || error.code === "42P01" || /could not find the table|does not exist/i.test(error.message ?? ""));
 
 async function seed() {
@@ -94,7 +94,7 @@ async function check() {
   const write = await anon.from("template_packs").insert({ id: "__probe__", name: "x", audience: "x", description: "x" });
   if (!write.error) {
     await createClient(url, secret ?? publishable, options).from("template_packs").delete().eq("id", "__probe__");
-    fail("the publishable key was able to WRITE to template_packs. Row-level security is not set up; run supabase/schema.sql.");
+    fail("the publishable key was able to WRITE to template_packs. Row-level security is not set up; run supabase/database.sql.");
   }
   ok("publishable key cannot write (row-level security is on)");
 

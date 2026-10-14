@@ -1,6 +1,6 @@
 import "server-only";
 import { get, run } from "./db";
-import { fingerprint, newId } from "./crypto";
+import { fingerprint, hashPassword, newId, verifyPassword } from "./crypto";
 import { createAgent, type AgentInput } from "./agents";
 import { decide, reportCompletion, type ActionRequest } from "./engine";
 import { insertEvent, updateEvent } from "./events";
@@ -28,17 +28,16 @@ export const DEMO_USERS = [
   { name: "Maya Lama", email: "viewer@himalayanthreads.test", role: "viewer" as const },
 ];
 
-// Fixed sign-in accounts, stored in the database as seed data. They are created
-// on the first sign-in attempt against any database (local or hosted), so they
-// also work on a fresh deployment. Their passwords are published here: set
-// AGENTGUARD_SEED_ACCOUNTS=false to switch them off, and change or remove them
-// before putting real data in the workspace.
+// Fixed sign-in accounts. They are written into the database on every request
+// that touches seeding (including every sign-in), so these emails and passwords
+// always work — locally and on Vercel. Set AGENTGUARD_SEED_ACCOUNTS=false to
+// switch them off. Change or remove them before storing real data.
 export const SEED_ACCOUNTS = [
-  { name: "Admin", email: "admin@gmail.com", password: "adminPASSWORD", role: "admin" as const },
+  { name: "Admin", email: "admin@gmail.com", password: "adminPASSWORD", role: "owner" as const },
   { name: "User", email: "user@gmail.com", password: "userPASSWORD", role: "viewer" as const },
 ];
 
-type Globals = typeof globalThis & { __agSeed?: Promise<void> };
+type Globals = typeof globalThis & { __agDemoSeed?: Promise<void> };
 
 export function seedEnabled(): boolean {
   const flag = process.env.AGENTGUARD_SEED_DEMO;
@@ -53,8 +52,8 @@ export function seedAccountsEnabled(): boolean {
 
 export async function ensureSeeded(): Promise<void> {
   const g = globalThis as Globals;
-  if (!g.__agSeed) {
-    g.__agSeed = (async () => {
+  if (!g.__agDemoSeed) {
+    g.__agDemoSeed = (async () => {
       // The demo workspace (a week of activity) is development-only by default.
       if (seedEnabled() && !(await get("SELECT 1 AS x FROM organizations LIMIT 1"))) {
         try {
@@ -63,30 +62,29 @@ export async function ensureSeeded(): Promise<void> {
           console.error("AgentGuard demo seed failed:", err);
         }
       }
-      // The sign-in accounts are separate, so they exist in production too.
-      if (seedAccountsEnabled()) await ensureSeedAccounts(Date.now());
     })().catch((err) => {
-      console.error("AgentGuard seed accounts failed:", err);
-      // Do not remember a failure: a hosted function can hit a database that is
-      // briefly unreachable, and the next request should try again.
-      g.__agSeed = undefined;
+      console.error("AgentGuard demo seed failed:", err);
+      g.__agDemoSeed = undefined;
     });
   }
-  return g.__agSeed;
+  await g.__agDemoSeed;
+  // Seed accounts run on every call so the published passwords stay correct even
+  // if someone changed them in the database, or a previous insert only partly ran.
+  if (seedAccountsEnabled()) {
+    try {
+      await ensureSeedAccounts(Date.now());
+    } catch (err) {
+      console.error("AgentGuard seed accounts failed:", err);
+    }
+  }
 }
 
 /**
- * Makes sure every seed account exists. They join the demo workspace when there
- * is one, otherwise the first workspace, otherwise a new "AgentGuard" workspace
- * is created. Safe to run on every start: accounts that exist are left alone.
+ * Inserts or updates every seed account so the published emails and passwords
+ * always sign in. They join the demo workspace when there is one, otherwise the
+ * first workspace, otherwise a new "AgentGuard" workspace is created.
  */
 async function ensureSeedAccounts(now: number): Promise<void> {
-  const missing: typeof SEED_ACCOUNTS = [];
-  for (const account of SEED_ACCOUNTS) {
-    if (!(await get("SELECT 1 AS x FROM users WHERE email = ?", account.email))) missing.push(account);
-  }
-  if (missing.length === 0) return;
-
   const demoOwner = await get<{ org_id: string }>("SELECT org_id FROM users WHERE email = ?", DEMO_USERS[0].email);
   const anyOrg = demoOwner ?? (await get<{ org_id: string }>("SELECT id AS org_id FROM organizations ORDER BY created_at ASC LIMIT 1"));
   let orgId = anyOrg?.org_id;
@@ -95,13 +93,30 @@ async function ensureSeedAccounts(now: number): Promise<void> {
     await run("INSERT INTO organizations (id, name, settings, created_at) VALUES (?, ?, ?, ?)", orgId, "AgentGuard", JSON.stringify(DEFAULT_SETTINGS), now);
   }
   const org = await getOrg(orgId);
-  const hasOwner = !!(await get("SELECT 1 AS x FROM users WHERE org_id = ? AND role = 'owner'", orgId));
-  let ownerAssigned = hasOwner;
-  for (const account of missing) {
-    // A workspace needs an owner to change its settings: if there is none, the first account becomes it.
-    const role = ownerAssigned ? account.role : "owner";
-    ownerAssigned = true;
-    await addMember(org, SYSTEM, { ...account, role }, now);
+
+  for (const account of SEED_ACCOUNTS) {
+    const existing = await get<{ id: string; name: string; role: string; org_id: string; password_hash: string }>(
+      "SELECT id, name, role, org_id, password_hash FROM users WHERE email = ?",
+      account.email,
+    );
+    if (existing) {
+      const same =
+        existing.name === account.name &&
+        existing.role === account.role &&
+        existing.org_id === org.id &&
+        verifyPassword(account.password, existing.password_hash);
+      if (same) continue;
+      await run(
+        "UPDATE users SET name = ?, password_hash = ?, role = ?, org_id = ? WHERE id = ?",
+        account.name,
+        hashPassword(account.password),
+        account.role,
+        org.id,
+        existing.id,
+      );
+    } else {
+      await addMember(org, SYSTEM, { name: account.name, email: account.email, role: account.role, password: account.password }, now);
+    }
   }
 }
 

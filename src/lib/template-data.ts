@@ -1,10 +1,10 @@
 // Template packs: ready-made rules and limits for common kinds of agent.
 //
 // This file is the built-in copy. The same data lives in Supabase (see
-// supabase/schema.sql), which is where the app reads it from. `npm run
-// supabase:seed` writes this file's contents to Supabase, and the app falls back
-// to it whenever Supabase cannot be reached. It must stay free of server-only
-// imports so that script can load it directly.
+// supabase/database.sql), which is where the app reads it from. `npm run
+// sql:build` regenerates that SQL block; `npm run supabase:seed` can also write
+// via the API. The app falls back here whenever Supabase cannot be reached. It
+// must stay free of server-only imports so those scripts can load it directly.
 
 export type TemplateEffect = "allow" | "ask_human" | "ask_two" | "block";
 
