@@ -22,8 +22,8 @@ export const PERIOD_LABEL: Record<LimitPeriod, string> = {
   month: "in any 30 days",
 };
 
-export function listLimits(orgId: string): Limit[] {
-  return all<Limit>("SELECT * FROM limits WHERE org_id = ? ORDER BY created_at ASC", orgId);
+export async function listLimits(orgId: string): Promise<Limit[]> {
+  return await all<Limit>("SELECT * FROM limits WHERE org_id = ? ORDER BY created_at ASC", orgId);
 }
 
 export interface LimitInput {
@@ -38,7 +38,7 @@ export interface LimitInput {
   template?: string | null;
 }
 
-export function createLimit(org: Org, actor: Actor, input: LimitInput, now: number): string {
+export async function createLimit(org: Org, actor: Actor, input: LimitInput, now: number): Promise<string> {
   if (!(input.value > 0)) throw new Error("The limit needs a value above zero.");
   if (!input.name.trim()) throw new Error("Give the limit a name.");
   let { scope, period } = input;
@@ -47,7 +47,7 @@ export function createLimit(org: Org, actor: Actor, input: LimitInput, now: numb
   else if (period === "action") period = "day";
   if (input.kind === "cost" && scope !== "agent" && scope !== "organization") scope = "agent";
   const id = newId("lim");
-  run(
+  await run(
     "INSERT INTO limits (id, org_id, name, kind, scope, agent_id, action, period, value, on_exceed, template, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
     id,
     org.id,
@@ -63,18 +63,18 @@ export function createLimit(org: Org, actor: Actor, input: LimitInput, now: numb
     input.template ?? null,
     now,
   );
-  audit(org.id, actor, "limit.created", { type: "limit", id }, { name: input.name, kind: input.kind, scope, period, value: input.value, on_exceed: input.onExceed }, now);
+  await audit(org.id, actor, "limit.created", { type: "limit", id }, { name: input.name, kind: input.kind, scope, period, value: input.value, on_exceed: input.onExceed }, now);
   return id;
 }
 
-export function setLimitEnabled(org: Org, actor: Actor, id: string, enabled: boolean, now: number): void {
-  if (run("UPDATE limits SET enabled = ? WHERE org_id = ? AND id = ?", enabled ? 1 : 0, org.id, id)) {
-    audit(org.id, actor, enabled ? "limit.enabled" : "limit.disabled", { type: "limit", id }, {}, now);
+export async function setLimitEnabled(org: Org, actor: Actor, id: string, enabled: boolean, now: number): Promise<void> {
+  if (await run("UPDATE limits SET enabled = ? WHERE org_id = ? AND id = ?", enabled ? 1 : 0, org.id, id)) {
+    await audit(org.id, actor, enabled ? "limit.enabled" : "limit.disabled", { type: "limit", id }, {}, now);
   }
 }
 
-export function updateLimit(org: Org, actor: Actor, id: string, input: LimitInput, now: number): void {
-  const before = get<Limit>("SELECT * FROM limits WHERE org_id = ? AND id = ?", org.id, id);
+export async function updateLimit(org: Org, actor: Actor, id: string, input: LimitInput, now: number): Promise<void> {
+  const before = await get<Limit>("SELECT * FROM limits WHERE org_id = ? AND id = ?", org.id, id);
   if (!before) throw new Error("Limit not found.");
   if (!(input.value > 0)) throw new Error("The limit needs a value above zero.");
   if (!input.name.trim()) throw new Error("Give the limit a name.");
@@ -83,7 +83,7 @@ export function updateLimit(org: Org, actor: Actor, id: string, input: LimitInpu
   else if (period === "action") period = "day";
   if (input.kind === "cost" && scope !== "agent" && scope !== "organization") scope = "agent";
   const onExceed = input.kind === "cost" ? "block" : input.onExceed;
-  run(
+  await run(
     "UPDATE limits SET name = ?, kind = ?, scope = ?, agent_id = ?, action = ?, period = ?, value = ?, on_exceed = ? WHERE org_id = ? AND id = ?",
     input.name.trim(),
     input.kind,
@@ -96,14 +96,14 @@ export function updateLimit(org: Org, actor: Actor, id: string, input: LimitInpu
     org.id,
     id,
   );
-  audit(org.id, actor, "limit.updated", { type: "limit", id }, { name: input.name.trim(), kind: input.kind, scope, period, value: input.value, on_exceed: onExceed }, now);
+  await audit(org.id, actor, "limit.updated", { type: "limit", id }, { name: input.name.trim(), kind: input.kind, scope, period, value: input.value, on_exceed: onExceed }, now);
 }
 
-export function deleteLimit(org: Org, actor: Actor, id: string, now: number): void {
-  const limit = get<Limit>("SELECT * FROM limits WHERE org_id = ? AND id = ?", org.id, id);
+export async function deleteLimit(org: Org, actor: Actor, id: string, now: number): Promise<void> {
+  const limit = await get<Limit>("SELECT * FROM limits WHERE org_id = ? AND id = ?", org.id, id);
   if (!limit) return;
-  run("DELETE FROM limits WHERE org_id = ? AND id = ?", org.id, id);
-  audit(org.id, actor, "limit.deleted", { type: "limit", id }, { name: limit.name }, now);
+  await run("DELETE FROM limits WHERE org_id = ? AND id = ?", org.id, id);
+  await audit(org.id, actor, "limit.deleted", { type: "limit", id }, { name: limit.name }, now);
 }
 
 export interface LimitSubject {
@@ -116,7 +116,7 @@ export interface LimitSubject {
 }
 
 /** Spend that already counts against a limit: reserved (approved, in flight) plus settled. */
-function windowTotal(orgId: string, limit: Limit, subject: LimitSubject, now: number): number | null {
+async function windowTotal(orgId: string, limit: Limit, subject: LimitSubject, now: number): Promise<number | null> {
   if (limit.period === "action") return 0;
   const where = ["org_id = ?", "created_at >= ?"];
   const params: SQLInputValue[] = [orgId, now - PERIOD_MS[limit.period]];
@@ -143,13 +143,13 @@ function windowTotal(orgId: string, limit: Limit, subject: LimitSubject, now: nu
   if (limit.kind === "money") {
     where.push("money_state IN ('reserved', 'settled')", "currency = ?");
     params.push(subject.currency ?? "usd");
-    return get<{ total: number }>(`SELECT COALESCE(SUM(amount), 0) AS total FROM events WHERE ${where.join(" AND ")}`, ...params)!.total;
+    return (await get<{ total: number }>(`SELECT COALESCE(SUM(amount), 0) AS total FROM events WHERE ${where.join(" AND ")}`, ...params))!.total;
   }
   if (limit.kind === "cost") {
-    return get<{ total: number }>(`SELECT COALESCE(SUM(cost_usd), 0) AS total FROM events WHERE ${where.join(" AND ")}`, ...params)!.total;
+    return (await get<{ total: number }>(`SELECT COALESCE(SUM(cost_usd), 0) AS total FROM events WHERE ${where.join(" AND ")}`, ...params))!.total;
   }
   where.push("status IN ('allowed', 'approved', 'executing', 'executed', 'observed')");
-  return get<{ total: number }>(`SELECT COUNT(*) AS total FROM events WHERE ${where.join(" AND ")}`, ...params)!.total;
+  return (await get<{ total: number }>(`SELECT COUNT(*) AS total FROM events WHERE ${where.join(" AND ")}`, ...params))!.total;
 }
 
 function applies(limit: Limit, subject: LimitSubject): boolean {
@@ -163,9 +163,9 @@ const scopeLabel = (limit: Limit, s: LimitSubject) =>
   limit.scope === "customer" ? `customer ${s.customer}` : limit.scope === "resource" ? `${s.resource}` : limit.scope === "agent" ? "this agent" : "the organization";
 
 /** Money and count limits this action would break. */
-export function checkLimits(org: Org, subject: LimitSubject, now: number): AppliedRule[] {
+export async function checkLimits(org: Org, subject: LimitSubject, now: number): Promise<AppliedRule[]> {
   const hits: AppliedRule[] = [];
-  for (const limit of listLimits(org.id)) {
+  for (const limit of await listLimits(org.id)) {
     if (limit.kind === "cost" || !applies(limit, subject)) continue;
     if (limit.kind === "money") {
       if (subject.amount === null) continue;
@@ -175,7 +175,7 @@ export function checkLimits(org: Org, subject: LimitSubject, now: number): Appli
         }
         continue;
       }
-      const used = windowTotal(org.id, limit, subject, now);
+      const used = await windowTotal(org.id, limit, subject, now);
       if (used === null) continue;
       if (used + subject.amount > limit.value) {
         hits.push(
@@ -186,7 +186,7 @@ export function checkLimits(org: Org, subject: LimitSubject, now: number): Appli
         );
       }
     } else {
-      const used = windowTotal(org.id, limit, subject, now);
+      const used = await windowTotal(org.id, limit, subject, now);
       if (used === null) continue;
       if (used + 1 > limit.value) {
         hits.push(hit(limit, `${scopeLabel(limit, subject)} has already done this ${used} times ${PERIOD_LABEL[limit.period]}; the limit is ${limit.value}.`));
@@ -201,13 +201,13 @@ function hit(limit: Limit, detail: string): AppliedRule {
 }
 
 /** AI-cost budgets already used up for this agent. Checked before a model call is forwarded. */
-export function checkCostBudgets(org: Org, agentId: string, now: number): AppliedRule[] {
+export async function checkCostBudgets(org: Org, agentId: string, now: number): Promise<AppliedRule[]> {
   const subject: LimitSubject = { agentId, action: "ai.completion", amount: null, currency: null, customer: null, resource: null };
   const hits: AppliedRule[] = [];
-  for (const limit of listLimits(org.id)) {
+  for (const limit of await listLimits(org.id)) {
     if (limit.kind !== "cost" || !limit.enabled) continue;
     if (limit.agent_id && limit.agent_id !== agentId) continue;
-    const used = windowTotal(org.id, limit, subject, now) ?? 0;
+    const used = await windowTotal(org.id, limit, subject, now) ?? 0;
     if (used >= limit.value) {
       hits.push({
         id: limit.id,
@@ -227,11 +227,11 @@ export interface LimitUsage {
 }
 
 /** Current usage for the limits page. Customer and resource limits have no single total, so they return null. */
-export function limitUsage(org: Org, now: number): LimitUsage[] {
-  return listLimits(org.id).map((limit) => {
+export async function limitUsage(org: Org, now: number): Promise<LimitUsage[]> {
+  return Promise.all((await listLimits(org.id)).map(async (limit) => {
     if (limit.period === "action" || limit.scope === "customer" || limit.scope === "resource") return { limit, used: null };
     if (limit.scope === "agent" && !limit.agent_id) return { limit, used: null };
     const subject: LimitSubject = { agentId: limit.agent_id ?? "", action: "", amount: null, currency: "usd", customer: null, resource: null };
-    return { limit, used: windowTotal(org.id, limit, subject, now) };
-  });
+    return { limit, used: await windowTotal(org.id, limit, subject, now) };
+  }));
 }

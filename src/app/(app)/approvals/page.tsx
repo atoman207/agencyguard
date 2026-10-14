@@ -14,10 +14,12 @@ export const metadata: Metadata = { title: "Approvals" };
 export default async function ApprovalsPage({ searchParams }: { searchParams: Promise<{ tab?: string }> }) {
   const { org, now } = await requireSession();
   const tab = (await searchParams).tab === "history" ? "history" : "waiting";
-  expireOverdue(org, now);
-  const approvals = listApprovals(org.id, { status: tab === "waiting" ? "pending" : "decided", limit: 60 });
-  const agents = new Map(listAgents(org.id).map((a) => [a.id, a]));
+  await expireOverdue(org, now);
+  const approvals = await listApprovals(org.id, { status: tab === "waiting" ? "pending" : "decided", limit: 60 });
+  const agents = new Map((await listAgents(org.id)).map((a) => [a.id, a]));
   const tz = org.settings.timezone;
+  const rows = await Promise.all(approvals.map(async (a) => ({ approval: a, event: await getEvent(org.id, a.event_id) })));
+  const listed = rows.filter((r): r is { approval: (typeof rows)[number]["approval"]; event: NonNullable<(typeof rows)[number]["event"]> } => !!r.event);
 
   return (
     <>
@@ -25,7 +27,7 @@ export default async function ApprovalsPage({ searchParams }: { searchParams: Pr
       <Tabs
         current={tab}
         tabs={[
-          { id: "waiting", href: "/approvals", label: "Waiting", count: countPending(org.id) },
+          { id: "waiting", href: "/approvals", label: "Waiting", count: await countPending(org.id) },
           { id: "history", href: "/approvals?tab=history", label: "History" },
         ]}
       />
@@ -40,9 +42,7 @@ export default async function ApprovalsPage({ searchParams }: { searchParams: Pr
         </Card>
       ) : tab === "waiting" ? (
         <ul className="space-y-3">
-          {approvals.map((a) => {
-            const event = getEvent(org.id, a.event_id);
-            if (!event) return null;
+          {listed.map(({ approval: a, event }) => {
             const done = a.decisions.filter((d) => d.decision === "approve").length;
             return (
               <li key={a.id}>
@@ -88,10 +88,7 @@ export default async function ApprovalsPage({ searchParams }: { searchParams: Pr
                 </tr>
               </thead>
               <tbody>
-                {approvals.map((a) => {
-                  const event = getEvent(org.id, a.event_id);
-                  if (!event) return null;
-                  return (
+                {listed.map(({ approval: a, event }) => (
                     <tr key={a.id}>
                       <td className="whitespace-nowrap text-sm tabular-nums text-ink-muted">{dateTime(a.decided_at ?? a.created_at, tz)}</td>
                       <td className="whitespace-nowrap font-medium">{agents.get(a.agent_id)?.name ?? "Unknown"}</td>
@@ -104,8 +101,7 @@ export default async function ApprovalsPage({ searchParams }: { searchParams: Pr
                       <td><ApprovalBadge status={a.status} /></td>
                       <td className="text-sm text-ink-soft">{a.decisions.map((d) => d.user_name).join(", ") || (a.status === "expired" ? "Nobody in time" : "Kill switch")}</td>
                     </tr>
-                  );
-                })}
+                ))}
               </tbody>
             </table>
           </div>

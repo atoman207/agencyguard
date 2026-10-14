@@ -5,13 +5,13 @@ import type { LimitKind, LimitPeriod, LimitScope } from "@/lib/types";
 // GET/POST /v1/limits — spending limits, AI-cost budgets and action counts.
 export const GET = route(async (request) => {
   const auth = await managementAuth(request, "viewer");
-  return Response.json({ limits: listLimits(auth.org.id) });
+  return Response.json({ limits: await listLimits(auth.org.id) });
 });
 
 export const POST = route(async (request) => {
   const auth = await managementAuth(request);
   const body = await readJson(request);
-  const id = createLimit(
+  const id = await createLimit(
     auth.org,
     auth.actor,
     {
@@ -26,5 +26,5 @@ export const POST = route(async (request) => {
     },
     Date.now(),
   );
-  return Response.json({ limit: listLimits(auth.org.id).find((l) => l.id === id) }, { status: 201 });
+  return Response.json({ limit: (await listLimits(auth.org.id)).find((l) => l.id === id) }, { status: 201 });
 });

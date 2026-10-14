@@ -28,13 +28,13 @@ const TONE: Record<NonNullable<Fact["tone"]>, string> = {
 export default async function ApprovalPage({ params }: { params: Promise<{ id: string }> }) {
   const { org, user, now } = await requireSession();
   const { id } = await params;
-  expireOverdue(org, now);
-  const approval = getApproval(org.id, id);
+  await expireOverdue(org, now);
+  const approval = await getApproval(org.id, id);
   if (!approval) notFound();
-  const event = getEvent(org.id, approval.event_id);
+  const event = await getEvent(org.id, approval.event_id);
   if (!event) notFound();
-  const agent = getAgent(org.id, approval.agent_id);
-  const owner = listUsers(org.id).find((u) => u.id === agent?.owner_user_id);
+  const agent = await getAgent(org.id, approval.agent_id);
+  const owner = (await listUsers(org.id)).find((u) => u.id === agent?.owner_user_id);
   const tz = org.settings.timezone;
   const isResponse = approval.kind === "response";
   const mayDecide = canApprove(user.role);

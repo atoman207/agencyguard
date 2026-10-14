@@ -8,7 +8,7 @@ import { requestOrigin } from "@/server/origin";
 
 export const metadata: Metadata = { title: "Connect an agent" };
 
-function Method({ id, title, level, effort, children }: { id: string; title: string; level: "Enforced" | "Cooperative"; effort: string; children: React.ReactNode }) {
+async function Method({ id, title, level, effort, children }: { id: string; title: string; level: "Enforced" | "Cooperative"; effort: string; children: React.ReactNode }) {
   return (
     <Card id={id} className="scroll-mt-6">
       <CardHeader
@@ -24,7 +24,7 @@ function Method({ id, title, level, effort, children }: { id: string; title: str
 export default async function ConnectPage() {
   const { org } = await requireSession();
   const origin = await requestOrigin();
-  const mcp = listMcpServers(org.id)[0]?.slug ?? "your-server";
+  const mcp = (await listMcpServers(org.id))[0]?.slug ?? "your-server";
   const f = org.settings.failureBehaviour;
 
   return (

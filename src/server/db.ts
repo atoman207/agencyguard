@@ -2,12 +2,17 @@ import "server-only";
 import { DatabaseSync, type SQLInputValue, type StatementSync } from "node:sqlite";
 import fs from "node:fs";
 import path from "node:path";
+import postgres, { type Sql } from "postgres";
 
-// The roadmap targets PostgreSQL with row-level security. This MVP uses the
-// SQLite engine built into Node so it runs with no services to install.
-// Every query below filters by org_id; that is the only customer separation.
+// Local: SQLite in .data/. Vercel (DATABASE_URL set): Supabase Postgres via the
+// transaction pooler. Callers always use async get/all/run/tx. Every query
+// still filters by org_id for customer separation.
 
 export const DATA_DIR = process.env.AGENTGUARD_DATA_DIR ?? path.join(process.cwd(), ".data");
+
+export function usesPostgres(): boolean {
+  return !!process.env.DATABASE_URL;
+}
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS organizations (
@@ -281,20 +286,49 @@ type Globals = typeof globalThis & {
   __agDb?: DatabaseSync;
   __agStatements?: Map<string, StatementSync>;
   __agTxDepth?: number;
+  __agPg?: Sql;
+  __agPgTx?: Sql | null;
 };
 const g = globalThis as Globals;
 
-export function db(): DatabaseSync {
+function toPgParams(sql: string): string {
+  let i = 0;
+  return sql.replace(/\?/g, () => `$${++i}`);
+}
+
+function normalizeRow(row: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(row)) {
+    out[k] = typeof v === "bigint" ? Number(v) : v;
+  }
+  return out;
+}
+
+function pg(): Sql {
+  if (!g.__agPg) {
+    const url = process.env.DATABASE_URL;
+    if (!url) throw new Error("DATABASE_URL is not set.");
+    g.__agPg = postgres(url, {
+      prepare: false, // required for Supabase transaction pooler
+      max: 1,
+      idle_timeout: 20,
+      connect_timeout: 10,
+    });
+    g.__agPgTx = null;
+  }
+  return g.__agPgTx ?? g.__agPg;
+}
+
+function sqliteDb(): DatabaseSync {
   if (!g.__agDb) {
     fs.mkdirSync(DATA_DIR, { recursive: true });
     const conn = new DatabaseSync(path.join(DATA_DIR, "agentguard.db"));
     conn.exec("PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;");
     conn.exec(SCHEMA);
-    // Older local databases were created before avatar existed.
     try {
       conn.exec("ALTER TABLE users ADD COLUMN avatar TEXT");
     } catch {
-      /* column already present */
+      /* already present */
     }
     g.__agDb = conn;
     g.__agStatements = new Map();
@@ -303,8 +337,8 @@ export function db(): DatabaseSync {
   return g.__agDb;
 }
 
-function statement(sql: string): StatementSync {
-  const conn = db();
+function sqliteStatement(sql: string): StatementSync {
+  const conn = sqliteDb();
   let st = g.__agStatements!.get(sql);
   if (!st) {
     st = conn.prepare(sql);
@@ -313,34 +347,65 @@ function statement(sql: string): StatementSync {
   return st;
 }
 
-// node:sqlite returns null-prototype objects, which React refuses to pass to
-// Client Components, so rows are copied into plain objects.
-export function all<T>(sql: string, ...params: SQLInputValue[]): T[] {
-  return statement(sql)
+/** @deprecated Prefer async get/all/run. Kept for rare sync-only call sites during migration. */
+export function db(): DatabaseSync {
+  if (usesPostgres()) throw new Error("db() is only available with local SQLite. Use get/all/run with DATABASE_URL.");
+  return sqliteDb();
+}
+
+export async function all<T>(sql: string, ...params: SQLInputValue[]): Promise<T[]> {
+  if (usesPostgres()) {
+    const rows = await pg().unsafe(toPgParams(sql), params as never[]);
+    return rows.map((row) => normalizeRow(row as Record<string, unknown>) as T);
+  }
+  return sqliteStatement(sql)
     .all(...params)
     .map((row) => ({ ...row })) as T[];
 }
 
-export function get<T>(sql: string, ...params: SQLInputValue[]): T | undefined {
-  const row = statement(sql).get(...params);
+export async function get<T>(sql: string, ...params: SQLInputValue[]): Promise<T | undefined> {
+  if (usesPostgres()) {
+    const rows = await pg().unsafe(toPgParams(sql), params as never[]);
+    const row = rows[0] as Record<string, unknown> | undefined;
+    return row ? (normalizeRow(row) as T) : undefined;
+  }
+  const row = sqliteStatement(sql).get(...params);
   return row ? ({ ...row } as T) : undefined;
 }
 
-export function run(sql: string, ...params: SQLInputValue[]): number {
-  return Number(statement(sql).run(...params).changes);
+export async function run(sql: string, ...params: SQLInputValue[]): Promise<number> {
+  if (usesPostgres()) {
+    const result = await pg().unsafe(toPgParams(sql), params as never[]);
+    return Number(result.count ?? 0);
+  }
+  return Number(sqliteStatement(sql).run(...params).changes);
 }
 
 /**
- * Runs `fn` atomically. The driver is synchronous and Node is single-threaded,
- * so as long as `fn` does not await, no other request can interleave.
+ * Runs `fn` atomically. With Postgres, nested get/all/run inside `fn` use the
+ * same transaction connection.
  */
-export function tx<T>(fn: () => T): T {
-  const conn = db();
-  if (g.__agTxDepth! > 0) return fn();
+export async function tx<T>(fn: () => Promise<T> | T): Promise<T> {
+  if (usesPostgres()) {
+    if (g.__agTxDepth! > 0) return (await fn()) as T;
+    return (await pg().begin(async (sql) => {
+      g.__agPgTx = sql as unknown as Sql;
+      g.__agTxDepth = 1;
+      try {
+        return (await fn()) as T;
+      } finally {
+        g.__agPgTx = null;
+        g.__agTxDepth = 0;
+      }
+    })) as T;
+  }
+
+  const conn = sqliteDb();
+    if (g.__agTxDepth! > 0) return (await fn()) as T;
   conn.exec("BEGIN IMMEDIATE");
   g.__agTxDepth = 1;
   try {
-    const result = fn();
+    const result = await fn();
     conn.exec("COMMIT");
     return result;
   } catch (err) {

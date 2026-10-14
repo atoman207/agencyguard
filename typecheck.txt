@@ -1,0 +1,333 @@
+﻿node.exe : npm warn Unknown env config "devdir". This will stop working in the next major version of npm. See `npm 
+help npmrc` for supported config options.
+At line:1 char:1
++ & "C:\Program Files\nodejs/node.exe" "C:\Program Files\nodejs/node_mo ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (npm warn Unknow...config options.:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+
+> agentguard@0.1.0 typecheck
+> tsc --noEmit
+
+src/app/(app)/agents/[id]/page.tsx(35,29): error TS2339: Property 'agents' does not exist on type 'Promise<Coverage>'.
+src/app/(app)/agents/[id]/page.tsx(35,42): error TS7006: Parameter 'a' implicitly has an 'any' type.
+src/app/(app)/agents/[id]/page.tsx(104,36): error TS7006: Parameter 'row' implicitly has an 'any' type.
+src/app/(app)/agents/page.tsx(17,37): error TS2339: Property 'agents' does not exist on type 'Promise<Coverage>'.
+src/app/(app)/agents/page.tsx(17,49): error TS7006: Parameter 'a' implicitly has an 'any' type.
+src/app/(app)/agents/page.tsx(18,50): error TS2339: Property 'map' does not exist on type 'Promise<User[]>'.
+src/app/(app)/agents/page.tsx(18,55): error TS7006: Parameter 'u' implicitly has an 'any' type.
+src/app/(app)/agents/page.tsx(46,70): error TS2322: Type '{}' is not assignable to type 'ReactNode'.
+src/app/(app)/agents/page.tsx(75,43): error TS2339: Property 'tools' does not exist on type '{}'.
+src/app/(app)/agents/page.tsx(75,62): error TS2339: Property 'enforced' does not exist on type '{}'.
+src/app/(app)/agents/page.tsx(78,19): error TS2322: Type 'unknown' is not assignable to type 'ReactNode'.
+src/app/(app)/agents/page.tsx(78,42): error TS2739: Type '{}' is missing the following properties from type '{ enforced: number; cooperative: number; uncovered: number; tools: number; }': enforced, cooperative, uncovered, tools
+src/app/(app)/approvals/page.tsx(19,51): error TS2339: Property 'map' does not exist on type 'Promise<Agent[]>'.
+src/app/(app)/approvals/page.tsx(19,56): error TS7006: Parameter 'a' implicitly has an 'any' type.
+src/app/(app)/approvals/page.tsx(44,27): error TS1308: 'await' expressions are only allowed within async functions and at the top levels of modules.
+src/app/(app)/approvals/page.tsx(54,86): error TS2339: Property 'name' does not exist on type '{}'.
+src/app/(app)/approvals/page.tsx(92,33): error TS1308: 'await' expressions are only allowed within async functions and at the top levels of modules.
+src/app/(app)/approvals/page.tsx(97,94): error TS2339: Property 'name' does not exist on type '{}'.
+src/app/(app)/audit/page.tsx(71,20): error TS2339: Property 'ok' does not exist on type 'Promise<{ ok: boolean; entries: number; brokenAt: number | null; }>'.
+src/app/(app)/audit/page.tsx(72,113): error TS2339: Property 'entries' does not exist on type 'Promise<{ ok: boolean; entries: number; brokenAt: number | null; }>'.
+src/app/(app)/audit/page.tsx(76,126): error TS2339: Property 'brokenAt' does not exist on type 'Promise<{ ok: boolean; entries: number; brokenAt: number | null; }>'.
+src/app/(app)/audit/page.tsx(77,100): error TS2339: Property 'brokenAt' does not exist on type 'Promise<{ ok: boolean; entries: number; brokenAt: number | null; }>'.
+src/app/(app)/audit/page.tsx(122,73): error TS2322: Type 'Promise<string | null>' is not assignable to type 'Url'.
+src/app/(app)/coverage/page.tsx(25,18): error TS2339: Property 'total' does not exist on type 'Promise<Coverage>'.
+src/app/(app)/coverage/page.tsx(30,112): error TS2339: Property 'total' does not exist on type 'Promise<Coverage>'.
+src/app/(app)/coverage/page.tsx(31,73): error TS2339: Property 'total' does not exist on type 'Promise<Coverage>'.
+src/app/(app)/coverage/page.tsx(33,41): error TS2339: Property 'total' does not exist on type 'Promise<Coverage>'.
+src/app/(app)/coverage/page.tsx(64,48): error TS2339: Property 'gaps' does not exist on type 'Promise<Coverage>'.
+src/app/(app)/coverage/page.tsx(64,71): error TS2339: Property 'gaps' does not exist on type 'Promise<Coverage>'.
+src/app/(app)/coverage/page.tsx(65,14): error TS2339: Property 'gaps' does not exist on type 'Promise<Coverage>'.
+src/app/(app)/coverage/page.tsx(69,18): error TS2339: Property 'gaps' does not exist on type 'Promise<Coverage>'.
+src/app/(app)/coverage/page.tsx(69,28): error TS7006: Parameter 'g' implicitly has an 'any' type.
+src/app/(app)/coverage/page.tsx(69,31): error TS7006: Parameter 'i' implicitly has an 'any' type.
+src/app/(app)/coverage/page.tsx(89,12): error TS2339: Property 'agents' does not exist on type 'Promise<Coverage>'.
+src/app/(app)/coverage/page.tsx(89,26): error TS7031: Binding element 'agent' implicitly has an 'any' type.
+src/app/(app)/coverage/page.tsx(89,33): error TS7031: Binding element 'share' implicitly has an 'any' type.
+src/app/(app)/coverage/page.tsx(89,40): error TS7031: Binding element 'rows' implicitly has an 'any' type.
+src/app/(app)/coverage/page.tsx(110,30): error TS7006: Parameter 'r' implicitly has an 'any' type.
+src/app/(app)/limits/page.tsx(65,16): error TS2339: Property 'length' does not exist on type 'Promise<LimitUsage[]>'.
+src/app/(app)/limits/page.tsx(69,20): error TS2339: Property 'map' does not exist on type 'Promise<LimitUsage[]>'.
+src/app/(app)/limits/page.tsx(69,34): error TS7031: Binding element 'l' implicitly has an 'any' type.
+src/app/(app)/limits/page.tsx(69,37): error TS7031: Binding element 'used' implicitly has an 'any' type.
+src/app/(app)/overview/page.tsx(116,107): error TS2339: Property 'total' does not exist on type 'Promise<Coverage>'.
+src/app/(app)/overview/page.tsx(119,37): error TS2339: Property 'total' does not exist on type 'Promise<Coverage>'.
+src/app/(app)/overview/page.tsx(120,18): error TS2339: Property 'gaps' does not exist on type 'Promise<Coverage>'.
+src/app/(app)/overview/page.tsx(122,51): error TS2339: Property 'gaps' does not exist on type 'Promise<Coverage>'.
+src/app/(app)/overview/page.tsx(122,69): error TS2339: Property 'gaps' does not exist on type 'Promise<Coverage>'.
+src/app/(app)/overview/page.tsx(122,145): error TS2339: Property 'gaps' does not exist on type 'Promise<Coverage>'.
+src/app/(app)/overview/page.tsx(122,171): error TS2339: Property 'gaps' does not exist on type 'Promise<Coverage>'.
+src/app/(app)/responses/page.tsx(37,51): error TS2339: Property 'map' does not exist on type 'Promise<Agent[]>'.
+src/app/(app)/responses/page.tsx(37,56): error TS7006: Parameter 'a' implicitly has an 'any' type.
+src/app/(app)/responses/page.tsx(113,67): error TS2322: Type '{}' is not assignable to type 'ReactNode'.
+src/app/(app)/tools/page.tsx(33,54): error TS2339: Property 'map' does not exist on type 'Promise<Agent[]>'.
+src/app/(app)/tools/page.tsx(33,59): error TS7006: Parameter 'a' implicitly has an 'any' type.
+src/app/(app)/tools/page.tsx(35,78): error TS2322: Type 'string | {}' is not assignable to type 'string'.
+  Type '{}' is not assignable to type 'string'.
+src/app/(app)/tools/page.tsx(35,115): error TS2322: Type '{}' is not assignable to type 'string'.
+src/app/(app)/vault/page.tsx(20,55): error TS2339: Property 'map' does not exist on type 'Promise<Credential[]>'.
+src/app/(app)/vault/page.tsx(20,60): error TS7006: Parameter 'c' implicitly has an 'any' type.
+src/app/(app)/vault/page.tsx(23,40): error TS2339: Property 'mode' does not exist on type '{}'.
+src/app/(app)/vault/page.tsx(53,43): error TS2339: Property 'mode' does not exist on type '{}'.
+src/app/(app)/vault/page.tsx(53,84): error TS2339: Property 'mode' does not exist on type '{}'.
+src/app/(app)/vault/page.tsx(53,115): error TS2339: Property 'hint' does not exist on type '{}'.
+src/app/(app)/vault/page.tsx(75,24): error TS2339: Property 'mode' does not exist on type '{}'.
+src/app/(app)/vault/page.tsx(78,77): error TS2339: Property 'keys_rotated' does not exist on type '{}'.
+src/app/(app)/vault/page.tsx(90,105): error TS2339: Property 'mode' does not exist on type '{}'.
+src/app/(app)/vault/page.tsx(111,21): error TS2322: Type 'unknown' is not assignable to type 'ReactNode'.
+src/app/actions.ts(105,10): error TS1308: 'await' expressions are only allowed within async functions and at the top levels of modules.
+src/app/actions.ts(105,124): error TS2339: Property 'id' does not exist on type 'Promise<Agent>'.
+src/app/actions.ts(112,57): error TS1308: 'await' expressions are only allowed within async functions and at the top levels of modules.
+src/app/actions.ts(120,5): error TS1308: 'await' expressions are only allowed within async functions and at the top levels of modules.
+src/app/actions.ts(125,79): error TS1308: 'await' expressions are only allowed within async functions and at the top levels of modules.
+src/app/actions.ts(134,23): error TS1308: 'await' expressions are only allowed within async functions and at the top levels of modules.
+src/app/actions.ts(140,65): error TS1308: 'await' expressions are only allowed within async functions and at the top levels of modules.
+src/app/actions.ts(146,62): error TS1308: 'await' expressions are only allowed within async functions and at the top levels of modules.
+src/app/actions.ts(150,53): error TS1308: 'await' expressions are only allowed within async functions and at the top levels of modules.
+src/app/actions.ts(157,10): error TS1308: 'await' expressions are only allowed within async functions and at the top levels of modules.
+src/app/actions.ts(158,5): error TS1308: 'await' expressions are only allowed within async functions and at the top levels of modules.
+src/app/actions.ts(163,53): error TS1308: 'await' expressions are only allowed within async functions and at the top levels of modules.
+src/app/actions.ts(167,64): error TS1308: 'await' expressions are only allowed within async functions and at the top levels of modules.
+src/app/actions.ts(199,13): error TS1308: 'await' expressions are only allowed within async functions and at the top levels of modules.
+src/app/actions.ts(200,10): error TS1308: 'await' expressions are only allowed within async functions and at the top levels of modules.
+src/app/actions.ts(209,20): error TS1308: 'await' expressions are only allowed within async functions and at the top levels of modules.
+src/app/actions.ts(215,53): error TS1308: 'await' expressions are only allowed within async functions and at the top levels of modules.
+src/app/actions.ts(219,67): error TS1308: 'await' expressions are only allowed within async functions and at the top levels of modules.
+src/app/actions.ts(226,5): error TS1308: 'await' expressions are only allowed within async functions and at the top levels of modules.
+src/app/actions.ts(232,5): error TS1308: 'await' expressions are only allowed within async functions and at the top levels of modules.
+src/app/actions.ts(251,5): error TS1308: 'await' expressions are only allowed within async functions and at the top levels of modules.
+src/app/actions.ts(257,5): error TS1308: 'await' expressions are only allowed within async functions and at the top levels of modules.
+src/app/actions.ts(262,53): error TS1308: 'await' expressions are only allowed within async functions and at the top levels of modules.
+src/app/actions.ts(266,53): error TS1308: 'await' expressions are only allowed within async functions and at the top levels of modules.
+src/app/actions.ts(273,5): error TS1308: 'await' expressions are only allowed within async functions and at the top levels of modules.
+src/app/actions.ts(278,64): error TS1308: 'await' expressions are only allowed within async functions and at the top levels of modules.
+src/app/actions.ts(282,53): error TS1308: 'await' expressions are only allowed within async functions and at the top levels of modules.
+src/app/actions.ts(287,5): error TS1308: 'await' expressions are only allowed within async functions and at the top levels of modules.
+src/app/actions.ts(292,53): error TS1308: 'await' expressions are only allowed within async functions and at the top levels of modules.
+src/app/actions.ts(308,7): error TS1308: 'await' expressions are only allowed within async functions and at the top levels of modules.
+src/app/actions.ts(309,7): error TS1308: 'await' expressions are only allowed within async functions and at the top levels of modules.
+src/app/actions.ts(317,5): error TS1308: 'await' expressions are only allowed within async functions and at the top levels of modules.
+src/app/actions.ts(322,53): error TS1308: 'await' expressions are only allowed within async functions and at the top levels of modules.
+src/app/actions.ts(326,53): error TS1308: 'await' expressions are only allowed within async functions and at the top levels of modules.
+src/app/actions.ts(330,79): error TS1308: 'await' expressions are only allowed within async functions and at the top levels of modules.
+src/app/actions.ts(334,53): error TS1308: 'await' expressions are only allowed within async functions and at the top levels of modules.
+src/app/actions.ts(338,50): error TS1308: 'await' expressions are only allowed within async functions and at the top levels of modules.
+src/app/api/settings/route.ts(8,80): error TS2339: Property 'notifications' does not exist on type 'Promise<OrgSettings>'.
+src/app/api/settings/route.ts(8,119): error TS2339: Property 'notifications' does not exist on type 'Promise<OrgSettings>'.
+src/app/gateway/v1/chat/completions/route.ts(9,39): error TS2345: Argument of type 'Promise<{ ok: true; org: Org; agent: Agent; token: AgentToken; }>' is not assignable to parameter of type '{ org: Org; agent: Agent; token: AgentToken; }'.
+  Type 'Promise<{ ok: true; org: Org; agent: Agent; token: AgentToken; }>' is missing the following properties from type '{ org: Org; agent: Agent; token: AgentToken; }': org, agent, token
+src/app/mcp/[server]/route.ts(12,5): error TS2345: Argument of type 'Promise<{ ok: true; org: Org; agent: Agent; token: AgentToken; }>' is not assignable to parameter of type '{ org: Org; agent: Agent; token: AgentToken; }'.
+  Type 'Promise<{ ok: true; org: Org; agent: Agent; token: AgentToken; }>' is missing the following properties from type '{ org: Org; agent: Agent; token: AgentToken; }': org, agent, token
+src/app/v1/actions/[connector]/[action]/route.ts(19,39): error TS2339: Property 'org' does not exist on type 'Promise<{ ok: true; org: Org; agent: Agent; token: AgentToken; }>'.
+src/app/v1/actions/[connector]/[action]/route.ts(22,17): error TS2339: Property 'org' does not exist on type 'Promise<{ ok: true; org: Org; agent: Agent; token: AgentToken; }>'.
+src/app/v1/actions/[connector]/[action]/route.ts(22,34): error TS2339: Property 'agent' does not exist on type 'Promise<{ ok: true; org: Org; agent: Agent; token: AgentToken; }>'.
+src/app/v1/actions/[connector]/[action]/route.ts(22,53): error TS2339: Property 'token' does not exist on type 'Promise<{ ok: true; org: Org; agent: Agent; token: AgentToken; }>'.
+src/app/v1/actions/[connector]/[action]/route.ts(37,96): error TS2339: Property 'org' does not exist on type 'Promise<{ ok: true; org: Org; agent: Agent; token: AgentToken; }>'.
+src/app/v1/agents/[id]/[op]/route.ts(11,16): error TS2571: Object is of type 'unknown'.
+src/app/v1/agents/[id]/[op]/route.ts(23,69): error TS7006: Parameter 's' implicitly has an 'any' type.
+src/app/v1/approvals/[id]/route.ts(10,28): error TS2339: Property 'org' does not exist on type 'Promise<{ ok: true; org: Org; agent: Agent; token: AgentToken; }>'.
+src/app/v1/approvals/[id]/route.ts(11,43): error TS2339: Property 'org' does not exist on type 'Promise<{ ok: true; org: Org; agent: Agent; token: AgentToken; }>'.
+src/app/v1/approvals/[id]/route.ts(12,47): error TS2339: Property 'agent' does not exist on type 'Promise<{ ok: true; org: Org; agent: Agent; token: AgentToken; }>'.
+src/app/v1/approvals/[id]/route.ts(13,38): error TS2339: Property 'org' does not exist on type 'Promise<{ ok: true; org: Org; agent: Agent; token: AgentToken; }>'.
+src/app/v1/check/route.ts(8,44): error TS2339: Property 'org' does not exist on type 'Promise<{ ok: true; org: Org; agent: Agent; token: AgentToken; }>'.
+src/app/v1/check/route.ts(8,61): error TS2339: Property 'agent' does not exist on type 'Promise<{ ok: true; org: Org; agent: Agent; token: AgentToken; }>'.
+src/app/v1/check/route.ts(8,80): error TS2339: Property 'token' does not exist on type 'Promise<{ ok: true; org: Org; agent: Agent; token: AgentToken; }>'.
+src/app/v1/events/route.ts(10,27): error TS2339: Property 'org' does not exist on type 'Promise<{ ok: true; org: Org; agent: Agent; token: AgentToken; }>'.
+src/app/v1/events/route.ts(10,44): error TS2339: Property 'agent' does not exist on type 'Promise<{ ok: true; org: Org; agent: Agent; token: AgentToken; }>'.
+src/app/v1/events/route.ts(21,54): error TS2339: Property 'token' does not exist on type 'Promise<{ ok: true; org: Org; agent: Agent; token: AgentToken; }>'.
+src/app/v1/responses/check/route.ts(12,12): error TS2339: Property 'agent' does not exist on type 'Promise<{ ok: true; org: Org; agent: Agent; token: AgentToken; }>'.
+src/app/v1/responses/check/route.ts(12,84): error TS2339: Property 'agent' does not exist on type 'Promise<{ ok: true; org: Org; agent: Agent; token: AgentToken; }>'.
+src/app/v1/responses/check/route.ts(12,120): error TS2339: Property 'agent' does not exist on type 'Promise<{ ok: true; org: Org; agent: Agent; token: AgentToken; }>'.
+src/app/v1/responses/check/route.ts(15,17): error TS2339: Property 'org' does not exist on type 'Promise<{ ok: true; org: Org; agent: Agent; token: AgentToken; }>'.
+src/app/v1/responses/check/route.ts(15,34): error TS2339: Property 'agent' does not exist on type 'Promise<{ ok: true; org: Org; agent: Agent; token: AgentToken; }>'.
+src/server/approvals.ts(166,7): error TS18048: 'result.approval' is possibly 'undefined'.
+src/server/approvals.ts(170,36): error TS18048: 'result.event' is possibly 'undefined'.
+src/server/approvals.ts(170,61): error TS18048: 'result.approval' is possibly 'undefined'.
+src/server/approvals.ts(170,97): error TS18048: 'result.approval' is possibly 'undefined'.
+src/server/approvals.ts(175,3): error TS2322: Type '{ execute: boolean; approval: Approval | undefined; event: ActionEvent | undefined; }' is not assignable to type 'DecideResult'.
+  Types of property 'approval' are incompatible.
+    Type 'Approval | undefined' is not assignable to type 'Approval'.
+      Type 'undefined' is not assignable to type 'Approval'.
+src/server/approvals.ts(175,32): error TS18048: 'result.approval' is possibly 'undefined'.
+src/server/approvals.ts(175,73): error TS18048: 'result.event' is possibly 'undefined'.
+src/server/db.ts(391,5): error TS2322: Type 'UnwrapPromiseArray<T>' is not assignable to type 'T'.
+  'T' could be instantiated with an arbitrary type which could be unrelated to 'UnwrapPromiseArray<T>'.
+src/server/engine.ts(81,97): error TS1064: The return type of an async function or method must be the global Promise<T> type. Did you mean to write 'Promise<{ untrusted: boolean; source: string | null; }>'?
+src/server/engine.ts(144,27): error TS2345: Argument of type 'Promise<EventRow | undefined>' is not assignable to parameter of type 'EventRow'.
+  Type 'Promise<EventRow | undefined>' is missing the following properties from type 'Omit<ActionEvent, "params" | "rules" | "result">': org_id, action, created_at, id, and 28 more.
+src/server/engine.ts(202,3): error TS2322: Type 'Outcome | { event: ActionEvent | undefined; outcome: "allow"; duplicate: false; alreadyExecuted: false; }' is not assignable to type 'Outcome'.
+  Type '{ event: ActionEvent | undefined; outcome: "allow"; duplicate: false; alreadyExecuted: false; }' is not assignable to type 'Outcome'.
+    Types of property 'event' are incompatible.
+      Type 'ActionEvent | undefined' is not assignable to type 'ActionEvent'.
+        Type 'undefined' is not assignable to type 'ActionEvent'.
+src/server/engine.ts(270,7): error TS1308: 'await' expressions are only allowed within async functions and at the top levels of modules.
+src/server/engine.ts(271,7): error TS1308: 'await' expressions are only allowed within async functions and at the top levels of modules.
+src/server/engine.ts(284,31): error TS2345: Argument of type 'Promise<AppliedRule[]>' is not assignable to parameter of type 'AppliedRule[]'.
+  Type 'Promise<AppliedRule[]>' is missing the following properties from type 'AppliedRule[]': length, pop, push, concat, and 35 more.
+src/server/engine.ts(286,80): error TS2740: Type 'Promise<AppliedRule[]>' is missing the following properties from type 'AppliedRule[]': length, pop, push, concat, and 35 more.
+src/server/engine.ts(287,53): error TS2339: Property 'find' does not exist on type 'Promise<AppliedRule[]>'.
+src/server/engine.ts(287,59): error TS7006: Parameter 'v' implicitly has an 'any' type.
+src/server/engine.ts(362,24): error TS2488: Type 'Promise<AppliedRule[]>' must have a '[Symbol.iterator]()' method that returns an iterator.
+src/server/engine.ts(386,29): error TS2345: Argument of type 'Promise<AppliedRule[]>' is not assignable to parameter of type 'AppliedRule[]'.
+  Type 'Promise<AppliedRule[]>' is missing the following properties from type 'AppliedRule[]': length, pop, push, concat, and 35 more.
+src/server/engine.ts(388,31): error TS2339: Property 'filter' does not exist on type 'Promise<AppliedRule[]>'.
+src/server/engine.ts(388,39): error TS7006: Parameter 'v' implicitly has an 'any' type.
+src/server/engine.ts(394,7): error TS2740: Type 'Promise<AppliedRule[]>' is missing the following properties from type 'AppliedRule[]': length, pop, push, concat, and 35 more.
+src/server/engine.ts(395,56): error TS7006: Parameter 'v' implicitly has an 'any' type.
+src/server/engine.ts(410,26): error TS7006: Parameter 'v' implicitly has an 'any' type.
+src/server/engine.ts(410,151): error TS7006: Parameter 'v' implicitly has an 'any' type.
+src/server/engine.ts(416,33): error TS2339: Property 'some' does not exist on type 'Promise<AppliedRule[]>'.
+src/server/engine.ts(416,39): error TS7006: Parameter 'v' implicitly has an 'any' type.
+src/server/engine.ts(420,53): error TS2488: Type 'Promise<Fact[]>' must have a '[Symbol.iterator]()' method that returns an iterator.
+src/server/engine.ts(420,74): error TS2345: Argument of type 'Promise<AppliedRule[]>' is not assignable to parameter of type 'AppliedRule[]'.
+  Type 'Promise<AppliedRule[]>' is missing the following properties from type 'AppliedRule[]': length, pop, push, concat, and 35 more.
+src/server/engine.ts(425,26): error TS7006: Parameter 'v' implicitly has an 'any' type.
+src/server/engine.ts(425,154): error TS7006: Parameter 'v' implicitly has an 'any' type.
+src/server/engine.ts(425,185): error TS7006: Parameter 'v' implicitly has an 'any' type.
+src/server/engine.ts(464,3): error TS2322: Type 'ActionEvent | undefined' is not assignable to type 'ActionEvent'.
+  Type 'undefined' is not assignable to type 'ActionEvent'.
+src/server/engine.ts(496,163): error TS2339: Property 'map' does not exist on type 'Promise<EventRow[]>'.
+src/server/gateway.ts(94,5): error TS1308: 'await' expressions are only allowed within async functions and at the top levels of modules.
+src/server/gateway.ts(95,5): error TS1308: 'await' expressions are only allowed within async functions and at the top levels of modules.
+src/server/gateway.ts(142,18): error TS2339: Property 'length' does not exist on type 'Promise<AppliedRule[]>'.
+src/server/gateway.ts(143,144): error TS7053: Element implicitly has an 'any' type because expression of type '0' can't be used to index type 'Promise<AppliedRule[]>'.
+  Property '0' does not exist on type 'Promise<AppliedRule[]>'.
+src/server/gateway.ts(144,9): error TS2801: This condition will always return true since this 'Promise<boolean>' is always defined.
+src/server/gateway.ts(144,91): error TS2339: Property 'map' does not exist on type 'Promise<AppliedRule[]>'.
+src/server/gateway.ts(144,96): error TS7006: Parameter 'l' implicitly has an 'any' type.
+src/server/gateway.ts(145,57): error TS7053: Element implicitly has an 'any' type because expression of type '0' can't be used to index type 'Promise<AppliedRule[]>'.
+  Property '0' does not exist on type 'Promise<AppliedRule[]>'.
+src/server/gateway.ts(146,32): error TS7053: Element implicitly has an 'any' type because expression of type '0' can't be used to index type 'Promise<AppliedRule[]>'.
+  Property '0' does not exist on type 'Promise<AppliedRule[]>'.
+src/server/insights.ts(139,167): error TS2339: Property 'map' does not exist on type 'Promise<{ agent_id: string; t: number; }[]>'.
+src/server/insights.ts(139,172): error TS7006: Parameter 'r' implicitly has an 'any' type.
+src/server/insights.ts(140,3): error TS2322: Type '{ agent: Agent; actions: number; asked: number; blocked: number; failed: number; cost: number; lastSeen: {} | null; health: Health; }[]' is not assignable to type 'AgentStats[]'.
+  Type '{ agent: Agent; actions: number; asked: number; blocked: number; failed: number; cost: number; lastSeen: {} | null; health: Health; }' is not assignable to type 'AgentStats'.
+    Types of property 'lastSeen' are incompatible.
+      Type '{} | null' is not assignable to type 'number | null'.
+        Type '{}' is not assignable to type 'number'.
+src/server/insights.ts(198,57): error TS2339: Property 'map' does not exist on type 'Promise<Credential[]>'.
+src/server/insights.ts(198,62): error TS7006: Parameter 'c' implicitly has an 'any' type.
+src/server/insights.ts(208,26): error TS2339: Property 'mode' does not exist on type '{}'.
+src/server/insights.ts(208,51): error TS2339: Property 'keys_rotated' does not exist on type '{}'.
+src/server/insights.ts(253,28): error TS2339: Property 'gaps' does not exist on type 'Promise<Coverage>'.
+src/server/insights.ts(253,41): error TS7006: Parameter 'g' implicitly has an 'any' type.
+src/server/insights.ts(255,161): error TS7006: Parameter 'g' implicitly has an 'any' type.
+src/server/insights.ts(257,21): error TS2339: Property 'gaps' does not exist on type 'Promise<Coverage>'.
+src/server/insights.ts(257,34): error TS7006: Parameter 'g' implicitly has an 'any' type.
+src/server/insights.ts(285,53): error TS2339: Property 'filter' does not exist on type 'Promise<Limit[]>'.
+src/server/insights.ts(285,61): error TS7006: Parameter 'l' implicitly has an 'any' type.
+src/server/insights.ts(285,104): error TS7006: Parameter 'l' implicitly has an 'any' type.
+src/server/insights.ts(290,31): error TS2339: Property 'length' does not exist on type 'Promise<Rule[]>'.
+src/server/limits.ts(235,27): error TS1308: 'await' expressions are only allowed within async functions and at the top levels of modules.
+src/server/mcp.ts(133,24): error TS1308: 'await' expressions are only allowed within async functions and at the top levels of modules.
+src/server/mcp.ts(134,24): error TS1308: 'await' expressions are only allowed within async functions and at the top levels of modules.
+src/server/mcp.ts(134,65): error TS1308: 'await' expressions are only allowed within async functions and at the top levels of modules.
+src/server/mcp.ts(177,101): error TS2322: Type 'Promise<MoneyState>' is not assignable to type 'MoneyState | undefined'.
+src/server/mcp.ts(185,7): error TS2322: Type 'Promise<MoneyState>' is not assignable to type 'MoneyState | undefined'.
+src/server/rules.ts(37,44): error TS1064: The return type of an async function or method must be the global Promise<T> type. Did you mean to write 'Promise<Condition[]>'?
+src/server/rules.ts(164,92): error TS2339: Property 'map' does not exist on type 'Promise<Agent[]>'.
+src/server/rules.ts(164,97): error TS7006: Parameter 'a' implicitly has an 'any' type.
+src/server/rules.ts(182,61): error TS2339: Property 'id' does not exist on type '{}'.
+src/server/rules.ts(183,35): error TS2345: Argument of type '{}' is not assignable to parameter of type 'Pick<Agent, "platform" | "environment">'.
+  Type '{}' is missing the following properties from type 'Pick<Agent, "platform" | "environment">': platform, environment
+src/server/rules.ts(189,34): error TS2339: Property 'name' does not exist on type '{}'.
+src/server/scenarios.ts(117,45): error TS2322: Type 'Promise<number>' is not assignable to type 'number'.
+src/server/scenarios.ts(120,124): error TS2345: Argument of type 'Promise<number>' is not assignable to parameter of type 'number'.
+src/server/scenarios.ts(125,70): error TS2322: Type 'Promise<number>' is not assignable to type 'number'.
+src/server/scenarios.ts(138,74): error TS2345: Argument of type 'Promise<string>' is not assignable to parameter of type 'string'.
+src/server/scenarios.ts(143,63): error TS2345: Argument of type 'Promise<string>' is not assignable to parameter of type 'string'.
+src/server/scenarios.ts(148,54): error TS2345: Argument of type 'Promise<string>' is not assignable to parameter of type 'string'.
+src/server/scenarios.ts(149,71): error TS2345: Argument of type 'Promise<string>' is not assignable to parameter of type 'string'.
+src/server/scenarios.ts(150,42): error TS2345: Argument of type 'Promise<string>' is not assignable to parameter of type 'string'.
+src/server/scenarios.ts(151,133): error TS2345: Argument of type 'Promise<string>' is not assignable to parameter of type 'SQLInputValue'.
+  Type 'Promise<string>' is missing the following properties from type 'DataView<ArrayBufferLike>': buffer, byteLength, byteOffset, getFloat32, and 21 more.
+src/server/scenarios.ts(156,100): error TS2345: Argument of type 'Promise<string>' is not assignable to parameter of type 'string'.
+src/server/scenarios.ts(163,17): error TS2339: Property 'outcome' does not exist on type 'Promise<Outcome>'.
+src/server/scenarios.ts(163,48): error TS2339: Property 'event' does not exist on type 'Promise<Outcome>'.
+src/server/scenarios.ts(164,47): error TS2339: Property 'event' does not exist on type 'Promise<Outcome>'.
+src/server/scenarios.ts(164,121): error TS2345: Argument of type 'Promise<number>' is not assignable to parameter of type 'number'.
+src/server/scenarios.ts(169,15): error TS2339: Property 'outcome' does not exist on type 'Promise<Outcome>'.
+src/server/scenarios.ts(170,63): error TS2322: Type 'Promise<number>' is not assignable to type 'number'.
+src/server/scenarios.ts(170,91): error TS2339: Property 'event' does not exist on type 'Promise<Outcome>'.
+src/server/scenarios.ts(183,13): error TS2339: Property 'outcome' does not exist on type 'Promise<Outcome>'.
+src/server/scenarios.ts(198,173): error TS2345: Argument of type 'Promise<number>' is not assignable to parameter of type 'number'.
+src/server/scenarios.ts(207,163): error TS2345: Argument of type 'Promise<number>' is not assignable to parameter of type 'number'.
+src/server/scenarios.ts(229,205): error TS2345: Argument of type 'Promise<number>' is not assignable to parameter of type 'number'.
+src/server/scenarios.ts(246,107): error TS2345: Argument of type 'Promise<number>' is not assignable to parameter of type 'number'.
+src/server/scenarios.ts(249,79): error TS2322: Type 'Promise<number>' is not assignable to type 'number'.
+src/server/scenarios.ts(251,157): error TS2345: Argument of type 'Promise<number>' is not assignable to parameter of type 'number'.
+src/server/scenarios.ts(253,19): error TS2339: Property 'event' does not exist on type 'Promise<Outcome>'.
+src/server/scenarios.ts(253,184): error TS2339: Property 'event' does not exist on type 'Promise<Outcome>'.
+src/server/seed.ts(104,59): error TS1308: 'await' expressions are only allowed within async functions and at the top levels of modules.
+src/server/seed.ts(153,131): error TS2339: Property 'id' does not exist on type 'Promise<Tool>'.
+src/server/seed.ts(164,47): error TS2339: Property 'id' does not exist on type 'Promise<Agent>'.
+src/server/seed.ts(182,30): error TS2362: The left-hand side of an arithmetic operation must be of type 'any', 'number', 'bigint' or an enum type.
+src/server/seed.ts(205,18): error TS2362: The left-hand side of an arithmetic operation must be of type 'any', 'number', 'bigint' or an enum type.
+src/server/seed.ts(205,39): error TS2362: The left-hand side of an arithmetic operation must be of type 'any', 'number', 'bigint' or an enum type.
+src/server/seed.ts(205,80): error TS2322: Type 'Promise<number>' is not assignable to type 'number'.
+src/server/seed.ts(205,101): error TS2322: Type 'Promise<number>' is not assignable to type 'number'.
+src/server/seed.ts(211,86): error TS2339: Property 'id' does not exist on type 'Promise<Agent>'.
+src/server/seed.ts(217,48): error TS2362: The left-hand side of an arithmetic operation must be of type 'any', 'number', 'bigint' or an enum type.
+src/server/seed.ts(217,99): error TS2362: The left-hand side of an arithmetic operation must be of type 'any', 'number', 'bigint' or an enum type.
+src/server/seed.ts(220,33): error TS2365: Operator '>' cannot be applied to types 'Promise<number>' and 'number'.
+src/server/seed.ts(220,40): error TS2356: An arithmetic operand must be of type 'any', 'number', 'bigint' or an enum type.
+src/server/seed.ts(224,17): error TS2345: Argument of type 'Promise<Agent>' is not assignable to parameter of type 'Agent'.
+  Type 'Promise<Agent>' is missing the following properties from type 'Agent': id, org_id, name, platform, and 11 more.
+src/server/seed.ts(225,17): error TS2345: Argument of type 'Promise<Agent>' is not assignable to parameter of type 'Agent'.
+  Type 'Promise<Agent>' is missing the following properties from type 'Agent': id, org_id, name, platform, and 11 more.
+src/server/seed.ts(225,43): error TS2365: Operator '+' cannot be applied to types 'Promise<number>' and '2000'.
+src/server/seed.ts(229,30): error TS2365: Operator '+' cannot be applied to types 'Promise<number>' and 'Promise<number>'.
+src/server/seed.ts(229,109): error TS2362: The left-hand side of an arithmetic operation must be of type 'any', 'number', 'bigint' or an enum type.
+src/server/seed.ts(231,11): error TS2345: Argument of type 'Promise<Agent>' is not assignable to parameter of type 'Agent'.
+  Type 'Promise<Agent>' is missing the following properties from type 'Agent': id, org_id, name, platform, and 11 more.
+src/server/seed.ts(234,11): error TS2365: Operator '+' cannot be applied to types 'Promise<number>' and '4000'.
+src/server/seed.ts(238,17): error TS2345: Argument of type 'Promise<Agent>' is not assignable to parameter of type 'Agent'.
+  Type 'Promise<Agent>' is missing the following properties from type 'Agent': id, org_id, name, platform, and 11 more.
+src/server/seed.ts(238,43): error TS2365: Operator '+' cannot be applied to types 'Promise<number>' and '9000'.
+src/server/seed.ts(242,50): error TS2740: Type 'Promise<Agent>' is missing the following properties from type 'Agent': id, org_id, name, platform, and 11 more.
+src/server/seed.ts(242,88): error TS2322: Type 'Promise<number>' is not assignable to type 'number'.
+src/server/seed.ts(243,139): error TS2365: Operator '+' cannot be applied to types 'Promise<number>' and 'number'.
+src/server/seed.ts(244,34): error TS2740: Type 'Promise<Agent>' is missing the following properties from type 'Agent': id, org_id, name, platform, and 11 more.
+src/server/seed.ts(244,77): error TS2365: Operator '+' cannot be applied to types 'Promise<number>' and '3600000'.
+src/server/seed.ts(248,33): error TS2365: Operator '>' cannot be applied to types 'Promise<number>' and 'number'.
+src/server/seed.ts(248,40): error TS2356: An arithmetic operand must be of type 'any', 'number', 'bigint' or an enum type.
+src/server/seed.ts(251,17): error TS2345: Argument of type 'Promise<Agent>' is not assignable to parameter of type 'Agent'.
+  Type 'Promise<Agent>' is missing the following properties from type 'Agent': id, org_id, name, platform, and 11 more.
+src/server/seed.ts(252,39): error TS2367: This comparison appears to be unintentional because the types 'Promise<number>' and '1' have no overlap.
+src/server/seed.ts(253,17): error TS2345: Argument of type 'Promise<Agent>' is not assignable to parameter of type 'Agent'.
+  Type 'Promise<Agent>' is missing the following properties from type 'Agent': id, org_id, name, platform, and 11 more.
+src/server/seed.ts(253,144): error TS2365: Operator '>' cannot be applied to types 'number | Promise<number>' and 'number'.
+src/server/seed.ts(253,232): error TS2365: Operator '+' cannot be applied to types 'Promise<number>' and '3000'.
+src/server/seed.ts(254,17): error TS2345: Argument of type 'Promise<Agent>' is not assignable to parameter of type 'Agent'.
+  Type 'Promise<Agent>' is missing the following properties from type 'Agent': id, org_id, name, platform, and 11 more.
+src/server/seed.ts(254,171): error TS2365: Operator '+' cannot be applied to types 'Promise<number>' and '5000'.
+src/server/seed.ts(258,33): error TS2365: Operator '>' cannot be applied to types 'Promise<number>' and 'number'.
+src/server/seed.ts(258,40): error TS2356: An arithmetic operand must be of type 'any', 'number', 'bigint' or an enum type.
+src/server/seed.ts(262,17): error TS2345: Argument of type 'Promise<Agent>' is not assignable to parameter of type 'Agent'.
+  Type 'Promise<Agent>' is missing the following properties from type 'Agent': id, org_id, name, platform, and 11 more.
+src/server/seed.ts(264,9): error TS2345: Argument of type 'Promise<Agent>' is not assignable to parameter of type 'Agent'.
+  Type 'Promise<Agent>' is missing the following properties from type 'Agent': id, org_id, name, platform, and 11 more.
+src/server/seed.ts(267,9): error TS2365: Operator '+' cannot be applied to types 'Promise<number>' and '5000'.
+src/server/seed.ts(273,33): error TS2365: Operator '>' cannot be applied to types 'Promise<number>' and 'number'.
+src/server/seed.ts(273,40): error TS2356: An arithmetic operand must be of type 'any', 'number', 'bigint' or an enum type.
+src/server/seed.ts(276,17): error TS2345: Argument of type 'Promise<Agent>' is not assignable to parameter of type 'Agent'.
+  Type 'Promise<Agent>' is missing the following properties from type 'Agent': id, org_id, name, platform, and 11 more.
+src/server/seed.ts(277,17): error TS2345: Argument of type 'Promise<Agent>' is not assignable to parameter of type 'Agent'.
+  Type 'Promise<Agent>' is missing the following properties from type 'Agent': id, org_id, name, platform, and 11 more.
+src/server/seed.ts(277,152): error TS2365: Operator '+' cannot be applied to types 'Promise<number>' and '2000'.
+src/server/seed.ts(278,17): error TS2345: Argument of type 'Promise<Agent>' is not assignable to parameter of type 'Agent'.
+  Type 'Promise<Agent>' is missing the following properties from type 'Agent': id, org_id, name, platform, and 11 more.
+src/server/seed.ts(278,44): error TS2365: Operator '+' cannot be applied to types 'Promise<number>' and '6000'.
+src/server/seed.ts(283,13): error TS2345: Argument of type 'Promise<Agent>' is not assignable to parameter of type 'Agent'.
+  Type 'Promise<Agent>' is missing the following properties from type 'Agent': id, org_id, name, platform, and 11 more.
+src/server/seed.ts(287,5): error TS2345: Argument of type 'Promise<Agent>' is not assignable to parameter of type 'Agent'.
+  Type 'Promise<Agent>' is missing the following properties from type 'Agent': id, org_id, name, platform, and 11 more.
+src/server/seed.ts(293,5): error TS2345: Argument of type 'Promise<Agent>' is not assignable to parameter of type 'Agent'.
+  Type 'Promise<Agent>' is missing the following properties from type 'Agent': id, org_id, name, platform, and 11 more.
+src/server/templates.ts(95,54): error TS2339: Property 'has' does not exist on type 'Promise<Set<string>>'.
+src/server/users.ts(118,67): error TS1064: The return type of an async function or method must be the global Promise<T> type. Did you mean to write 'Promise<{ token: string; expiresAt: number; }>'?
+src/server/users.ts(170,50): error TS1064: The return type of an async function or method must be the global Promise<T> type. Did you mean to write 'Promise<{ orgId: string; keyId: string; name: string; } | undefined>'?
+src/server/vault.ts(169,69): error TS1064: The return type of an async function or method must be the global Promise<T> type. Did you mean to write 'Promise<{ mode: "live" | "sandbox"; apiKey: string; baseUrl?: string | undefined; } | null>'?

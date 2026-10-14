@@ -13,12 +13,12 @@ import type { ActionEvent, Agent, AppliedRule, Condition, Org, Rule, RuleEffect 
 type RuleRow = Omit<Rule, "conditions"> & { conditions: string };
 const parse = (r: RuleRow): Rule => ({ ...r, conditions: json<Condition[]>(r.conditions, []) });
 
-export function listRules(orgId: string): Rule[] {
-  return all<RuleRow>("SELECT * FROM rules WHERE org_id = ? ORDER BY created_at ASC", orgId).map(parse);
+export async function listRules(orgId: string): Promise<Rule[]> {
+  return (await all<RuleRow>("SELECT * FROM rules WHERE org_id = ? ORDER BY created_at ASC", orgId)).map(parse);
 }
 
-export function getRule(orgId: string, id: string): Rule | undefined {
-  const row = get<RuleRow>("SELECT * FROM rules WHERE org_id = ? AND id = ?", orgId, id);
+export async function getRule(orgId: string, id: string): Promise<Rule | undefined> {
+  const row = await get<RuleRow>("SELECT * FROM rules WHERE org_id = ? AND id = ?", orgId, id);
   return row ? parse(row) : undefined;
 }
 
@@ -34,7 +34,7 @@ export interface RuleInput {
 
 const EFFECTS: RuleEffect[] = ["allow", "ask_human", "ask_two", "block"];
 
-function validate(input: RuleInput): Condition[] {
+async function validate(input: RuleInput): Promise<Condition[]> {
   if (!input.name.trim()) throw new Error("Give the rule a name.");
   if (!EFFECTS.includes(input.effect)) throw new Error("Choose what the rule should do.");
   const conditions = validateConditions(input.conditions);
@@ -43,10 +43,10 @@ function validate(input: RuleInput): Condition[] {
   return conditions;
 }
 
-export function createRule(org: Org, actor: Actor, input: RuleInput, now: number): string {
-  const conditions = validate(input);
+export async function createRule(org: Org, actor: Actor, input: RuleInput, now: number): Promise<string> {
+  const conditions = await validate(input);
   const id = newId("rul");
-  run(
+  await run(
     "INSERT INTO rules (id, org_id, name, description, agent_id, conditions, effect, enabled, template, created_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
     id,
     org.id,
@@ -61,15 +61,15 @@ export function createRule(org: Org, actor: Actor, input: RuleInput, now: number
     now,
     now,
   );
-  audit(org.id, actor, "rule.created", { type: "rule", id }, { name: input.name, rule: describeRule(conditions, input.effect), agent_id: input.agentId }, now);
+  await audit(org.id, actor, "rule.created", { type: "rule", id }, { name: input.name, rule: describeRule(conditions, input.effect), agent_id: input.agentId }, now);
   return id;
 }
 
-export function updateRule(org: Org, actor: Actor, id: string, input: RuleInput, now: number): void {
-  const before = getRule(org.id, id);
+export async function updateRule(org: Org, actor: Actor, id: string, input: RuleInput, now: number): Promise<void> {
+  const before = await getRule(org.id, id);
   if (!before) throw new Error("Rule not found.");
-  const conditions = validate(input);
-  run(
+  const conditions = await validate(input);
+  await run(
     "UPDATE rules SET name = ?, description = ?, agent_id = ?, conditions = ?, effect = ?, version = version + 1, updated_at = ? WHERE org_id = ? AND id = ?",
     input.name.trim(),
     input.description?.trim() ?? "",
@@ -80,7 +80,7 @@ export function updateRule(org: Org, actor: Actor, id: string, input: RuleInput,
     org.id,
     id,
   );
-  audit(
+  await audit(
     org.id,
     actor,
     "rule.updated",
@@ -90,18 +90,18 @@ export function updateRule(org: Org, actor: Actor, id: string, input: RuleInput,
   );
 }
 
-export function setRuleEnabled(org: Org, actor: Actor, id: string, enabled: boolean, now: number): void {
-  const rule = getRule(org.id, id);
+export async function setRuleEnabled(org: Org, actor: Actor, id: string, enabled: boolean, now: number): Promise<void> {
+  const rule = await getRule(org.id, id);
   if (!rule) return;
-  run("UPDATE rules SET enabled = ?, updated_at = ? WHERE org_id = ? AND id = ?", enabled ? 1 : 0, now, org.id, id);
-  audit(org.id, actor, enabled ? "rule.enabled" : "rule.disabled", { type: "rule", id }, { name: rule.name }, now);
+  await run("UPDATE rules SET enabled = ?, updated_at = ? WHERE org_id = ? AND id = ?", enabled ? 1 : 0, now, org.id, id);
+  await audit(org.id, actor, enabled ? "rule.enabled" : "rule.disabled", { type: "rule", id }, { name: rule.name }, now);
 }
 
-export function deleteRule(org: Org, actor: Actor, id: string, now: number): void {
-  const rule = getRule(org.id, id);
+export async function deleteRule(org: Org, actor: Actor, id: string, now: number): Promise<void> {
+  const rule = await getRule(org.id, id);
   if (!rule) return;
-  run("DELETE FROM rules WHERE org_id = ? AND id = ?", org.id, id);
-  audit(org.id, actor, "rule.deleted", { type: "rule", id }, { name: rule.name, rule: describeRule(rule.conditions, rule.effect) }, now);
+  await run("DELETE FROM rules WHERE org_id = ? AND id = ?", org.id, id);
+  await audit(org.id, actor, "rule.deleted", { type: "rule", id }, { name: rule.name, rule: describeRule(rule.conditions, rule.effect) }, now);
 }
 
 type ContextEvent = Pick<ActionEvent, "action" | "tool" | "risk" | "source" | "enforcement" | "amount" | "customer" | "resource" | "params" | "untrusted_input_seen" | "created_at">;
@@ -159,10 +159,10 @@ export interface ReplayResult {
  * Policy replay: runs a draft rule over recent real activity and reports what
  * it would have caught, before the rule is switched on.
  */
-export function replayRule(org: Org, draft: { conditions: unknown; effect: RuleEffect; agentId: string | null }, days: number, now: number): ReplayResult {
+export async function replayRule(org: Org, draft: { conditions: unknown; effect: RuleEffect; agentId: string | null }, days: number, now: number): Promise<ReplayResult> {
   const conditions = validateConditions(draft.conditions);
-  const agents = new Map(all<Agent>("SELECT * FROM agents WHERE org_id = ?", org.id).map((a) => [a.id, a]));
-  const rows = all<{
+  const agents = new Map((await all<Agent>("SELECT * FROM agents WHERE org_id = ?", org.id)).map((a) => [a.id, a]));
+  const rows = await all<{
     id: string; agent_id: string; tool: string; action: string; risk: ActionEvent["risk"]; source: ActionEvent["source"];
     enforcement: ActionEvent["enforcement"]; amount: number | null; currency: string | null; customer: string | null;
     resource: string | null; params: string; untrusted_input_seen: number; created_at: number; would_decision: string;

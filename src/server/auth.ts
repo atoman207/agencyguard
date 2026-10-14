@@ -25,9 +25,9 @@ export const getSession = cache(async (): Promise<Session | null> => {
   await connection();
   if (!token) return null;
   const now = Date.now();
-  const user = userForSession(token, now);
+  const user = await userForSession(token, now);
   if (!user) return null;
-  return { user, org: getOrg(user.org_id), now };
+  return { user, org: await getOrg(user.org_id), now };
 });
 
 /**
@@ -41,8 +41,8 @@ export const getSession = cache(async (): Promise<Session | null> => {
 export async function readShellSession(): Promise<Pick<Session, "user" | "org"> | null> {
   const token = (await cookies()).get(SESSION_COOKIE)?.value;
   if (!token) return null;
-  const user = userForLiveSession(token);
-  return user ? { user, org: getOrg(user.org_id) } : null;
+  const user = await userForLiveSession(token);
+  return user ? { user, org: await getOrg(user.org_id) } : null;
 }
 
 /** For pages: sends anyone who is not signed in to the login page. */
@@ -60,7 +60,7 @@ export async function requireRole(min: Role): Promise<Session> {
 }
 
 export async function startSession(userId: string): Promise<void> {
-  const { token } = createSession(userId, Date.now());
+  const { token } = await createSession(userId, Date.now());
   (await cookies()).set(SESSION_COOKIE, token, {
     httpOnly: true,
     sameSite: "lax",
@@ -73,6 +73,6 @@ export async function startSession(userId: string): Promise<void> {
 export async function endSession(): Promise<void> {
   const store = await cookies();
   const token = store.get(SESSION_COOKIE)?.value;
-  if (token) destroySession(token);
+  if (token) await destroySession(token);
   store.delete(SESSION_COOKIE);
 }

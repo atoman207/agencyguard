@@ -5,7 +5,7 @@ import type { Role } from "@/lib/types";
 export const POST = route(async (request) => {
   const auth = await sessionAuth("owner");
   const body = await readJson(request);
-  const user = addMember(
+  const user = await addMember(
     auth.org,
     auth.actor,
     { name: String(body.name ?? ""), email: String(body.email ?? ""), role: body.role as Role, password: String(body.password ?? "") },

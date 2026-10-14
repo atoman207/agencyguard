@@ -19,13 +19,13 @@ export const metadata: Metadata = { title: "Overview" };
 export default async function OverviewPage() {
   const { user, org, now } = await requireSession();
   const tz = org.settings.timezone;
-  const o = overview(org, now);
-  const stats = agentStats(org, now);
-  const cov = coverage(org);
-  const steps = journey(org);
-  const recs = recommendations(org, now);
-  const alerts = listAlerts(org.id, { openOnly: true, limit: 5 });
-  const recent = listEvents(org.id, { limit: 8 }).filter((e) => e.action !== "ai.completion" || e.would_decision === "BLOCK");
+  const o = await overview(org, now);
+  const stats = await agentStats(org, now);
+  const cov = await coverage(org);
+  const steps = await journey(org);
+  const recs = await recommendations(org, now);
+  const alerts = await listAlerts(org.id, { openOnly: true, limit: 5 });
+  const recent = (await listEvents(org.id, { limit: 8 })).filter((e) => e.action !== "ai.completion" || e.would_decision === "BLOCK");
   const agents = new Map(stats.map((s) => [s.agent.id, s.agent]));
   const current = steps.findIndex((s) => !s.done);
 

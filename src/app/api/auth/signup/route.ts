@@ -4,7 +4,7 @@ import { signUp } from "@/server/users";
 
 export const POST = route(async (request) => {
   const body = await readJson(request);
-  const user = signUp(
+  const user = await signUp(
     { orgName: String(body.organization ?? ""), name: String(body.name ?? ""), email: String(body.email ?? ""), password: String(body.password ?? "") },
     Date.now(),
   );

@@ -30,7 +30,7 @@ const list = (value: unknown): string[] =>
   (Array.isArray(value) ? value : String(value ?? "").split(/[\n,]/)).map((v) => String(v).trim()).filter(Boolean);
 
 /** Applies a partial settings change. Only the fields present in `patch` are touched. */
-export function updateSettings(org: Org, actor: Actor, patch: Patch, now: number): OrgSettings {
+export async function updateSettings(org: Org, actor: Actor, patch: Patch, now: number): Promise<OrgSettings> {
   const s: OrgSettings = structuredClone(org.settings);
   const has = (o: Patch, key: string) => Object.prototype.hasOwnProperty.call(o, key);
 
@@ -109,10 +109,10 @@ export function updateSettings(org: Org, actor: Actor, patch: Patch, now: number
     s.defaultModelPrice = { inputPerM, outputPerM };
   }
 
-  saveSettings(org.id, s);
+  await saveSettings(org.id, s);
   // Addresses and secrets stay out of the audit log; only what changed is named.
   const changed = Object.keys(patch).filter((k) => k !== "notifications");
   if (Object.keys(notif).length) changed.push("notifications");
-  audit(org.id, actor, "settings.updated", { type: "organization", id: org.id }, { changed }, now);
+  await audit(org.id, actor, "settings.updated", { type: "organization", id: org.id }, { changed }, now);
   return s;
 }

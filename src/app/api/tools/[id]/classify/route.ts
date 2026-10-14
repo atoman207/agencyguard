@@ -12,8 +12,8 @@ export const POST = route(async (request, { params }: { params: Promise<{ id: st
   const now = Date.now();
   if (id === "by-name") {
     if (typeof body.name !== "string" || !body.name.trim()) throw new RequestError("Send the tool `name`.");
-    id = upsertTool(auth.org.id, body.name.trim(), now).id;
+    id = (await upsertTool(auth.org.id, body.name.trim(), now)).id;
   }
-  classifyTool(auth.org, auth.actor, id, String(body.action ?? ""), now);
+  await classifyTool(auth.org, auth.actor, id, String(body.action ?? ""), now);
   return Response.json({ ok: true });
 });

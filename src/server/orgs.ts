@@ -51,16 +51,16 @@ interface OrgRow {
   created_at: number;
 }
 
-export function getOrg(id: string): Org {
-  const row = get<OrgRow>("SELECT * FROM organizations WHERE id = ?", id);
+export async function getOrg(id: string): Promise<Org> {
+  const row = await get<OrgRow>("SELECT * FROM organizations WHERE id = ?", id);
   if (!row) throw new Error("Organization not found.");
   return { ...row, settings: withDefaults(json<Partial<OrgSettings>>(row.settings, {})) };
 }
 
-export function saveSettings(orgId: string, settings: OrgSettings): void {
-  run("UPDATE organizations SET settings = ? WHERE id = ?", JSON.stringify(settings), orgId);
+export async function saveSettings(orgId: string, settings: OrgSettings): Promise<void> {
+  await run("UPDATE organizations SET settings = ? WHERE id = ?", JSON.stringify(settings), orgId);
 }
 
-export function renameOrg(orgId: string, name: string): void {
-  run("UPDATE organizations SET name = ? WHERE id = ?", name, orgId);
+export async function renameOrg(orgId: string, name: string): Promise<void> {
+  await run("UPDATE organizations SET name = ? WHERE id = ?", name, orgId);
 }

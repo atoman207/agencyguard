@@ -6,11 +6,12 @@ import { decide, reportCompletion, type ActionRequest } from "./engine";
 import { insertEvent, updateEvent } from "./events";
 import { decideAndExecute, executeEvent } from "./execution";
 import { BUILTIN_DEMO, saveMcpServer } from "./mcp";
-import { getOrg, saveSettings } from "./orgs";
+import { SYSTEM } from "./audit";
+import { DEFAULT_SETTINGS, getOrg, saveSettings } from "./orgs";
 import { checkResponse } from "./response-check";
 import { installTemplate } from "./templates";
 import { classifyTool, declareTool, getTool, sightTool, upsertTool } from "./tools";
-import { addMember, getUser, signUp, userActor } from "./users";
+import { addMember, signUp, userActor } from "./users";
 import { prepare, getConnector, saveCredential } from "./vault";
 import type { ActionEvent, Agent, Source, User } from "@/lib/types";
 
@@ -27,10 +28,11 @@ export const DEMO_USERS = [
   { name: "Maya Lama", email: "viewer@himalayanthreads.test", role: "viewer" as const },
 ];
 
-// Fixed sign-in accounts, stored in the database as seed data. They are added
-// to the demo workspace on first run, and to an existing database the next
-// time anyone signs in. Like the demo accounts above, their passwords are
-// published here, so they follow the same rule: development only by default.
+// Fixed sign-in accounts, stored in the database as seed data. They are created
+// on the first sign-in attempt against any database (local or hosted), so they
+// also work on a fresh deployment. Their passwords are published here: set
+// AGENTGUARD_SEED_ACCOUNTS=false to switch them off, and change or remove them
+// before putting real data in the workspace.
 export const SEED_ACCOUNTS = [
   { name: "Admin", email: "admin@gmail.com", password: "adminPASSWORD", role: "admin" as const },
   { name: "User", email: "user@gmail.com", password: "userPASSWORD", role: "viewer" as const },
@@ -45,29 +47,61 @@ export function seedEnabled(): boolean {
   return process.env.NODE_ENV !== "production";
 }
 
-export function ensureSeeded(): Promise<void> {
+export function seedAccountsEnabled(): boolean {
+  return process.env.AGENTGUARD_SEED_ACCOUNTS !== "false";
+}
+
+export async function ensureSeeded(): Promise<void> {
   const g = globalThis as Globals;
   if (!g.__agSeed) {
     g.__agSeed = (async () => {
-      if (!seedEnabled()) return;
-      if (!get("SELECT 1 AS x FROM organizations LIMIT 1")) await seed(Date.now());
-      ensureSeedAccounts(Date.now());
+      // The demo workspace (a week of activity) is development-only by default.
+      if (seedEnabled() && !(await get("SELECT 1 AS x FROM organizations LIMIT 1"))) {
+        try {
+          await seed(Date.now());
+        } catch (err) {
+          console.error("AgentGuard demo seed failed:", err);
+        }
+      }
+      // The sign-in accounts are separate, so they exist in production too.
+      if (seedAccountsEnabled()) await ensureSeedAccounts(Date.now());
     })().catch((err) => {
-      console.error("AgentGuard demo seed failed:", err);
+      console.error("AgentGuard seed accounts failed:", err);
+      // Do not remember a failure: a hosted function can hit a database that is
+      // briefly unreachable, and the next request should try again.
+      g.__agSeed = undefined;
     });
   }
   return g.__agSeed;
 }
 
-/** Adds any missing seed account to the demo workspace. Safe to run on every start. */
-function ensureSeedAccounts(now: number): void {
-  const owner = get<{ id: string }>("SELECT id FROM users WHERE email = ?", DEMO_USERS[0].email);
-  if (!owner) return; // no demo workspace in this database
-  const ownerUser = getUser(owner.id)!;
-  const org = getOrg(ownerUser.org_id);
+/**
+ * Makes sure every seed account exists. They join the demo workspace when there
+ * is one, otherwise the first workspace, otherwise a new "AgentGuard" workspace
+ * is created. Safe to run on every start: accounts that exist are left alone.
+ */
+async function ensureSeedAccounts(now: number): Promise<void> {
+  const missing: typeof SEED_ACCOUNTS = [];
   for (const account of SEED_ACCOUNTS) {
-    if (get("SELECT 1 AS x FROM users WHERE email = ?", account.email)) continue;
-    addMember(org, userActor(ownerUser), account, now);
+    if (!(await get("SELECT 1 AS x FROM users WHERE email = ?", account.email))) missing.push(account);
+  }
+  if (missing.length === 0) return;
+
+  const demoOwner = await get<{ org_id: string }>("SELECT org_id FROM users WHERE email = ?", DEMO_USERS[0].email);
+  const anyOrg = demoOwner ?? (await get<{ org_id: string }>("SELECT id AS org_id FROM organizations ORDER BY created_at ASC LIMIT 1"));
+  let orgId = anyOrg?.org_id;
+  if (!orgId) {
+    orgId = newId("org");
+    await run("INSERT INTO organizations (id, name, settings, created_at) VALUES (?, ?, ?, ?)", orgId, "AgentGuard", JSON.stringify(DEFAULT_SETTINGS), now);
+  }
+  const org = await getOrg(orgId);
+  const hasOwner = !!(await get("SELECT 1 AS x FROM users WHERE org_id = ? AND role = 'owner'", orgId));
+  let ownerAssigned = hasOwner;
+  for (const account of missing) {
+    // A workspace needs an owner to change its settings: if there is none, the first account becomes it.
+    const role = ownerAssigned ? account.role : "owner";
+    ownerAssigned = true;
+    await addMember(org, SYSTEM, { ...account, role }, now);
   }
 }
 
@@ -98,12 +132,14 @@ async function seed(now: number): Promise<void> {
   const between = (lo: number, hi: number) => lo + Math.floor(rand() * (hi - lo + 1));
   const start = now - 7 * 86_400_000;
 
-  const owner = signUp({ orgName: "Himalayan Threads", name: DEMO_USERS[0].name, email: DEMO_USERS[0].email, password: DEMO_PASSWORD }, start);
-  let org = getOrg(owner.org_id);
+  const owner = await signUp({ orgName: "Himalayan Threads", name: DEMO_USERS[0].name, email: DEMO_USERS[0].email, password: DEMO_PASSWORD }, start);
+  let org = await getOrg(owner.org_id);
   const ownerActor = userActor(owner);
-  const [manager, admin] = DEMO_USERS.slice(1).map((u) => addMember(org, ownerActor, { ...u, password: DEMO_PASSWORD }, start)) as User[];
+  const [manager, admin] = await Promise.all(
+    DEMO_USERS.slice(1).map((u) => addMember(org, ownerActor, { ...u, password: DEMO_PASSWORD }, start)),
+  );
 
-  saveSettings(org.id, {
+  await saveSettings(org.id, {
     ...org.settings,
     approvalTimeoutMinutes: 24 * 60,
     responseCheck: {
@@ -120,48 +156,51 @@ async function seed(now: number): Promise<void> {
       ],
     },
   });
-  org = getOrg(org.id);
+  org = await getOrg(org.id);
 
-  for (const connector of ["stripe", "slack", "hubspot"]) saveCredential(org, ownerActor, { connector, mode: "sandbox", apiKey: "" }, start);
-  saveMcpServer(org, ownerActor, { slug: "shop", name: "Shop tools (demo MCP server)", url: BUILTIN_DEMO }, start);
+  for (const connector of ["stripe", "slack", "hubspot"]) await saveCredential(org, ownerActor, { connector, mode: "sandbox", apiKey: "" }, start);
+  await saveMcpServer(org, ownerActor, { slug: "shop", name: "Shop tools (demo MCP server)", url: BUILTIN_DEMO }, start);
 
   // Charges in the Stripe sandbox. The first five are the ones the playground uses.
-  const charge = (id: string, customer: string[], amount: number, description: string, at: number) =>
-    run(
+  const charge = async (id: string, customer: string[], amount: number, description: string, at: number) =>
+    await run(
       "INSERT INTO sandbox_charges (id, org_id, customer, customer_name, customer_email, amount, currency, description, created_at) VALUES (?, ?, ?, ?, ?, ?, 'usd', ?, ?)",
       id, org.id, customer[0], customer[1], customer[2], amount, description, at,
     );
-  charge("ch_1001", CUSTOMERS[0], 450, "Order #5521 — Pashmina shawl, Dhaka topi", now - 9 * 86_400_000);
-  charge("ch_1002", CUSTOMERS[1], 85, "Order #5530 — Lokta paper journal", now - 5 * 86_400_000);
-  charge("ch_1003", CUSTOMERS[2], 1250, "Order #5544 — Singing bowls, bulk", now - 4 * 86_400_000);
-  charge("ch_1004", CUSTOMERS[3], 240, "Order #5561 — Yak wool blanket", now - 3 * 86_400_000);
-  charge("ch_1005", CUSTOMERS[4], 60, "Order #5570 — Felt slippers", now - 2 * 86_400_000);
+  await charge("ch_1001", CUSTOMERS[0], 450, "Order #5521 — Pashmina shawl, Dhaka topi", now - 9 * 86_400_000);
+  await charge("ch_1002", CUSTOMERS[1], 85, "Order #5530 — Lokta paper journal", now - 5 * 86_400_000);
+  await charge("ch_1003", CUSTOMERS[2], 1250, "Order #5544 — Singing bowls, bulk", now - 4 * 86_400_000);
+  await charge("ch_1004", CUSTOMERS[3], 240, "Order #5561 — Yak wool blanket", now - 3 * 86_400_000);
+  await charge("ch_1005", CUSTOMERS[4], 60, "Order #5570 — Felt slippers", now - 2 * 86_400_000);
 
-  const agent = (input: Partial<AgentInput> & Pick<AgentInput, "name" | "platform" | "purpose" | "environment" | "mode">, ownerUser: User) =>
-    createAgent(org, ownerActor, { ownerUserId: ownerUser.id, handlesPrivateData: false, checkResponses: true, ...input }, start);
+  const agent = async (input: Partial<AgentInput> & Pick<AgentInput, "name" | "platform" | "purpose" | "environment" | "mode">, ownerUser: User) =>
+    await createAgent(org, ownerActor, { ownerUserId: ownerUser.id, handlesPrivateData: false, checkResponses: true, ...input }, start);
 
-  const support = agent({ name: "Support Sathi", platform: "n8n", purpose: "Answers customers, looks up orders and issues refunds.", environment: "production", mode: "enforce", handlesPrivateData: true }, manager);
-  const outreach = agent({ name: "Outreach Agent", platform: "Make", purpose: "Sends follow-up emails to wholesale leads and updates the CRM.", environment: "production", mode: "observe" }, admin);
-  const invoices = agent({ name: "Invoice Assistant", platform: "LangGraph", purpose: "Reads supplier invoices and prepares payments.", environment: "staging", mode: "enforce", handlesPrivateData: true }, admin);
-  const research = agent({ name: "Research Helper", platform: "OpenAI Agents SDK", purpose: "Reads supplier websites and summarises prices.", environment: "development", mode: "observe", checkResponses: false }, owner);
+  const support = await agent({ name: "Support Sathi", platform: "n8n", purpose: "Answers customers, looks up orders and issues refunds.", environment: "production", mode: "enforce", handlesPrivateData: true }, manager);
+  const outreach = await agent({ name: "Outreach Agent", platform: "Make", purpose: "Sends follow-up emails to wholesale leads and updates the CRM.", environment: "production", mode: "observe" }, admin);
+  const invoices = await agent({ name: "Invoice Assistant", platform: "LangGraph", purpose: "Reads supplier invoices and prepares payments.", environment: "staging", mode: "enforce", handlesPrivateData: true }, admin);
+  const research = await agent({ name: "Research Helper", platform: "OpenAI Agents SDK", purpose: "Reads supplier websites and summarises prices.", environment: "development", mode: "observe", checkResponses: false }, owner);
 
   await installTemplate(org, ownerActor, "ecommerce-support", { agentId: null, enable: true }, start);
   await installTemplate(org, ownerActor, "sales-outreach", { agentId: null, enable: true }, start);
   await installTemplate(org, ownerActor, "finance-operations", { agentId: null, enable: true }, start);
 
   // Tools the team has already classified.
-  const known = (name: string, action: string) => classifyTool(org, ownerActor, upsertTool(org.id, name, start).id, action, start);
-  known("gmail.send", "email.send");
-  known("crm.upsert_contact", "crm.update");
-  known("pay_invoice", "payment.payout");
-  known("shop.lookup_order", "order.read");
-  known("shop.update_shipping_address", "order.update");
-  known("shop.fetch_webpage", "web.fetch");
-  known("shop.send_email", "email.send");
-  known("shop.send_message", "message.send");
-  known("shop.delete_customer", "crm.delete");
+  const known = async (name: string, action: string) => {
+    const tool = await upsertTool(org.id, name, start);
+    await classifyTool(org, ownerActor, tool.id, action, start);
+  };
+  await known("gmail.send", "email.send");
+  await known("crm.upsert_contact", "crm.update");
+  await known("pay_invoice", "payment.payout");
+  await known("shop.lookup_order", "order.read");
+  await known("shop.update_shipping_address", "order.update");
+  await known("shop.fetch_webpage", "web.fetch");
+  await known("shop.send_email", "email.send");
+  await known("shop.send_message", "message.send");
+  await known("shop.delete_customer", "crm.delete");
   // A tool that never passes through AgentGuard: visible in coverage as a gap.
-  declareTool(org, ownerActor, invoices.id, { name: "postgres.query (direct database login)", action: "data.write", connection: "uncovered" }, start);
+  await declareTool(org, ownerActor, invoices.id, { name: "postgres.query (direct database login)", action: "data.write", connection: "uncovered" }, start);
 
   const act = async (a: Agent, source: Source, req: ActionRequest, at: number, approver?: { user: User; decision: "approve" | "reject"; second?: User; note?: string }) => {
     const ctx = { org, agent: a, source, now: at, live: false };
@@ -172,12 +211,12 @@ async function seed(now: number): Promise<void> {
       const prepared = await prepare(org, connector, def, req.params ?? {});
       request = { ...req, params: prepared.params, resource: prepared.resource, sourceFacts: prepared.facts, knownAction: def.action };
     }
-    const outcome = decide(ctx, request);
+    const outcome = await decide(ctx, request);
     const event = outcome.event;
     if (outcome.outcome === "allow" && !outcome.alreadyExecuted) {
       if (source === "vault") await executeEvent(org, event.id, at + 900, false);
-      else if (source === "mcp_gateway") updateEvent(event.id, { status: "executed", completed_at: at + 400 });
-      else reportCompletion({ org, agent: a, now: at + 1500, live: false }, { eventId: event.id, status: "completed" });
+      else if (source === "mcp_gateway") await updateEvent(event.id, { status: "executed", completed_at: at + 400 });
+      else await reportCompletion({ org, agent: a, now: at + 1500, live: false }, { eventId: event.id, status: "completed" });
     } else if (outcome.outcome === "pending" && approver && event.approval_id) {
       const decidedAt = at + between(2, 25) * 60_000;
       const result = await decideAndExecute(org, approver.user, event.approval_id, approver.decision, approver.note ?? "", "dashboard", decidedAt, false);
@@ -185,14 +224,14 @@ async function seed(now: number): Promise<void> {
         await decideAndExecute(org, approver.second, event.approval_id, "approve", "", "dashboard", decidedAt + 4 * 60_000, false);
       }
       if (approver.decision === "approve" && source !== "vault") {
-        const again = decide({ ...ctx, now: decidedAt + 6 * 60_000 }, request);
-        if (again.outcome === "allow") reportCompletion({ org, agent: a, now: decidedAt + 7 * 60_000, live: false }, { eventId: again.event.id, status: "completed" });
+        const again = await decide({ ...ctx, now: decidedAt + 6 * 60_000 }, request);
+        if (again.outcome === "allow") await reportCompletion({ org, agent: a, now: decidedAt + 7 * 60_000, live: false }, { eventId: again.event.id, status: "completed" });
       }
     }
     return outcome;
   };
 
-  const modelCall = (a: Agent, model: string, at: number, runId: string | null) => {
+  const modelCall = async (a: Agent, model: string, at: number, runId: string | null) => {
     const tokensIn = between(600, 3200);
     const tokensOut = between(120, 900);
     const price = model === "sandbox-large" ? { i: 5, o: 15 } : { i: 0.5, o: 1.5 };
@@ -205,10 +244,10 @@ async function seed(now: number): Promise<void> {
       cost_usd: (tokensIn * price.i + tokensOut * price.o) / 1_000_000, model, tokens_in: tokensIn, tokens_out: tokensOut, explanation: null, result: null,
       approval_id: null, duplicate_of: null, created_at: at, completed_at: at,
     };
-    insertEvent(event);
+    await insertEvent(event);
   };
-  const modelTool = upsertTool(org.id, "ai.completion", start);
-  for (const a of [support, outreach, invoices, research]) sightTool(org.id, a.id, modelTool.id, "ai_gateway", start);
+  const modelTool = await upsertTool(org.id, "ai.completion", start);
+  for (const a of [support, outreach, invoices, research]) await sightTool(org.id, a.id, modelTool.id, "ai_gateway", start);
 
   let chargeNo = 900;
   for (let day = 6; day >= 0; day--) {
@@ -222,11 +261,11 @@ async function seed(now: number): Promise<void> {
       const runId = `run_${newId("s").slice(2, 10)}`;
       const customer = pick(CUSTOMERS);
       await act(support, "mcp_gateway", { tool: "shop.lookup_order", params: { order_id: String(between(5200, 5600)) }, runId }, t);
-      modelCall(support, "sandbox-small", t + 2000, runId);
+      await modelCall(support, "sandbox-small", t + 2000, runId);
       if (rand() < 0.45) {
         const amount = rand() < 0.8 ? between(15, 95) : between(120, 380);
         const id = `ch_0${chargeNo++}`;
-        charge(id, customer, amount + between(0, 120), `Order #${between(5200, 5600)} — ${pick(PRODUCTS)}`, t - 3 * 86_400_000);
+        await charge(id, customer, amount + between(0, 120), `Order #${between(5200, 5600)} — ${pick(PRODUCTS)}`, t - 3 * 86_400_000);
         await act(
           support,
           "vault",
@@ -235,20 +274,20 @@ async function seed(now: number): Promise<void> {
           { user: manager, decision: rand() < 0.8 ? "approve" : "reject", note: rand() < 0.5 ? "Checked the order photos." : "" },
         );
       }
-      modelCall(support, "sandbox-small", t + 9000, runId);
+      await modelCall(support, "sandbox-small", t + 9000, runId);
     }
     if (day % 2 === 0) {
       const t = at();
-      const verdict = checkResponse({ org, agent: support, source: "ai_gateway", now: t, live: false }, "Of course! We guarantee a full refund, no questions asked. I will refund the entire amount within 3 days.");
+      const verdict = await checkResponse({ org, agent: support, source: "ai_gateway", now: t, live: false }, "Of course! We guarantee a full refund, no questions asked. I will refund the entire amount within 3 days.");
       if (verdict.approvalId) await decideAndExecute(org, manager, verdict.approvalId, day === 2 ? "approve" : "reject", "", "dashboard", t + 6 * 60_000, false);
-      checkResponse({ org, agent: support, source: "ai_gateway", now: t + 3_600_000, live: false }, "The jacket is $59 this week, and delivery to Pokhara is free.");
+      await checkResponse({ org, agent: support, source: "ai_gateway", now: t + 3_600_000, live: false }, "The jacket is $59 this week, and delivery to Pokhara is free.");
     }
 
     // Outreach Agent (observe mode): nothing is stopped, but the log shows what would have been.
     for (let i = between(3, 6); i > 0; i--) {
       const t = at();
       const runId = `run_${newId("o").slice(2, 10)}`;
-      modelCall(outreach, "sandbox-small", t, runId);
+      await modelCall(outreach, "sandbox-small", t, runId);
       const recipients = day === 3 && i === 1 ? 2400 : rand() < 0.2 ? between(60, 140) : between(1, 30);
       await act(outreach, "make", { tool: "gmail.send", params: { subject: "Autumn wholesale catalogue", recipient_count: recipients, segment: recipients > 500 ? "all-contacts" : "wholesale-leads", batch: `${day}-${i}` }, runId }, t + 3000);
       await act(outreach, "make", { tool: "crm.upsert_contact", params: { contact_id: String(between(400, 480)), properties: { last_contacted: `day-${day}` } }, runId }, t + 5000);
@@ -259,7 +298,7 @@ async function seed(now: number): Promise<void> {
       const t = at();
       const runId = `run_${newId("i").slice(2, 10)}`;
       const amount = rand() < 0.3 ? between(1100, 2600) : between(180, 900);
-      modelCall(invoices, "sandbox-large", t, runId);
+      await modelCall(invoices, "sandbox-large", t, runId);
       await act(
         invoices,
         "sdk",
@@ -273,9 +312,9 @@ async function seed(now: number): Promise<void> {
     for (let i = between(2, 5); i > 0; i--) {
       const t = at();
       const runId = `run_${newId("r").slice(2, 10)}`;
-      modelCall(research, "sandbox-large", t, runId);
+      await modelCall(research, "sandbox-large", t, runId);
       await act(research, "mcp_gateway", { tool: "shop.fetch_webpage", params: { url: `https://suppliers.example/prices/${between(1, 40)}` }, runId }, t + 2000);
-      modelCall(research, "sandbox-large", t + 6000, runId);
+      await modelCall(research, "sandbox-large", t + 6000, runId);
     }
   }
 
@@ -296,5 +335,5 @@ async function seed(now: number): Promise<void> {
     now - 41 * 60_000,
   );
 
-  if (!getTool(org.id, "stripe.refund")) throw new Error("Seed did not register the vault tools.");
+  if (!await getTool(org.id, "stripe.refund")) throw new Error("Seed did not register the vault tools.");
 }

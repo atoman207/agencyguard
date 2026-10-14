@@ -79,8 +79,8 @@ export async function chatCompletion(
   const messages = Array.isArray(body.messages) ? body.messages : [];
   const requestHash = `sha256:${sha256(canonical({ model, messages }))}`;
 
-  const tool = upsertTool(org.id, "ai.completion", now);
-  sightTool(org.id, agent.id, tool.id, connectionFor("ai_gateway"), now);
+  const tool = await upsertTool(org.id, "ai.completion", now);
+  await sightTool(org.id, agent.id, tool.id, connectionFor("ai_gateway"), now);
 
   const base: ActionEvent = {
     id: newId("evt"), org_id: org.id, agent_id: agent.id, run_id: runId, source: "ai_gateway", enforcement: "enforced",
@@ -90,9 +90,9 @@ export async function chatCompletion(
     amount: null, currency: null, customer: null, money_state: "none", cost_usd: 0, model, tokens_in: 0, tokens_out: 0,
     explanation: null, result: null, approval_id: null, duplicate_of: null, created_at: now, completed_at: now,
   };
-  const refuse = (status: number, code: string, verdict: AppliedRule): GatewayResult => {
-    insertEvent({ ...base, decision: "BLOCK", would_decision: "BLOCK", status: "blocked", rules: [verdict], reason: verdict.detail });
-    audit(org.id, agentActor(agent), "gateway.blocked", { type: "event", id: base.id }, { model, reason: verdict.detail }, now);
+  const refuse = async (status: number, code: string, verdict: AppliedRule): Promise<GatewayResult> => {
+    await insertEvent({ ...base, decision: "BLOCK", would_decision: "BLOCK", status: "blocked", rules: [verdict], reason: verdict.detail });
+    await audit(org.id, agentActor(agent), "gateway.blocked", { type: "event", id: base.id }, { model, reason: verdict.detail }, now);
     return { status, body: errorBody(code, verdict.detail), eventId: base.id, stream: false };
   };
 
@@ -100,28 +100,28 @@ export async function chatCompletion(
   // refuse in enforce mode; in observe mode they raise the alert and let the call through.
   const observe = agent.mode === "observe";
   let wouldBlock: AppliedRule | null = null;
-  const alertOnce = (kind: string, alert: Parameters<typeof createAlert>[1]) => {
-    const recent = get("SELECT 1 AS x FROM alerts WHERE org_id = ? AND agent_id = ? AND kind = ? AND created_at >= ?", org.id, agent.id, kind, now - 10 * 60_000);
-    if (!recent) createAlert(org, alert, now);
+  const alertOnce = async (kind: string, alert: Parameters<typeof createAlert>[1]) => {
+    const recent = await get("SELECT 1 AS x FROM alerts WHERE org_id = ? AND agent_id = ? AND kind = ? AND created_at >= ?", org.id, agent.id, kind, now - 10 * 60_000);
+    if (!recent) await createAlert(org, alert, now);
     return !recent;
   };
   if (agent.status !== "active") {
     const killed = agent.status === "killed";
-    return refuse(403, killed ? "agent_killed" : "agent_paused", {
+    return await refuse(403, killed ? "agent_killed" : "agent_paused", {
       id: "builtin:agent_stopped", name: killed ? "Kill switch" : "Agent paused", effect: "block", kind: "builtin",
       detail: killed ? "This agent was stopped with the kill switch." : `This agent is paused${agent.status_reason ? `: ${agent.status_reason}` : "."}`,
     });
   }
   if (!token.scopes.some((s) => matchesPattern(s, "ai.completion"))) {
-    return refuse(403, "token_scope", { id: "builtin:token_scope", name: "Token scope", effect: "block", kind: "builtin", detail: "This token is not scoped for AI-model calls." });
+    return await refuse(403, "token_scope", { id: "builtin:token_scope", name: "Token scope", effect: "block", kind: "builtin", detail: "This token is not scoped for AI-model calls." });
   }
 
   // Loop detection: a burst of calls, or the same request repeated.
-  const perMinute = get<{ n: number }>("SELECT COUNT(*) AS n FROM events WHERE agent_id = ? AND action = 'ai.completion' AND created_at >= ?", agent.id, now - 60_000)!.n;
-  const identical = get<{ n: number }>(
+  const perMinute = (await get<{ n: number }>("SELECT COUNT(*) AS n FROM events WHERE agent_id = ? AND action = 'ai.completion' AND created_at >= ?", agent.id, now - 60_000))!.n;
+  const identical = (await get<{ n: number }>(
     "SELECT COUNT(*) AS n FROM events WHERE agent_id = ? AND action = 'ai.completion' AND params_fingerprint = ? AND created_at >= ?",
     agent.id, requestHash, now - 5 * 60_000,
-  )!.n;
+  ))!.n;
   const loop =
     identical >= org.settings.loop.maxIdenticalCalls
       ? `the same request was sent ${identical + 1} times in 5 minutes`
@@ -133,23 +133,23 @@ export async function chatCompletion(
     alertOnce("loop.detected", { kind: "loop.detected", severity: "warning", title: `${agent.name} looks stuck in a loop`, body: `${wouldBlock.detail} It is in observe mode, so nothing was stopped.`, agentId: agent.id, eventId: base.id });
   } else if (loop) {
     const reason = `Loop detected: ${loop}.`;
-    setAgentStatus(org, SYSTEM, agent.id, "paused", reason, now);
-    createAlert(org, { kind: "loop.detected", severity: "critical", title: `${agent.name} was paused`, body: `${reason} Review it, then resume the agent.`, agentId: agent.id, eventId: base.id }, now);
-    return refuse(429, "loop_detected", { id: "builtin:loop", name: "Loop detection", effect: "block", kind: "builtin", detail: `${reason} The agent has been paused.` });
+    await setAgentStatus(org, SYSTEM, agent.id, "paused", reason, now);
+    await createAlert(org, { kind: "loop.detected", severity: "critical", title: `${agent.name} was paused`, body: `${reason} Review it, then resume the agent.`, agentId: agent.id, eventId: base.id }, now);
+    return await refuse(429, "loop_detected", { id: "builtin:loop", name: "Loop detection", effect: "block", kind: "builtin", detail: `${reason} The agent has been paused.` });
   }
 
-  const overBudget = checkCostBudgets(org, agent.id, now);
+  const overBudget = await checkCostBudgets(org, agent.id, now);
   if (overBudget.length) {
-    const first = alertOnce("limit.reached", { kind: "limit.reached", severity: "warning", title: `${agent.name} reached its AI budget`, body: overBudget[0].detail + (observe ? " It is in observe mode, so calls continue." : ""), agentId: agent.id, eventId: base.id });
+    const first = await alertOnce("limit.reached", { kind: "limit.reached", severity: "warning", title: `${agent.name} reached its AI budget`, body: overBudget[0].detail + (observe ? " It is in observe mode, so calls continue." : ""), agentId: agent.id, eventId: base.id });
     if (first) emitWebhook(org, "limit.reached", { agent_id: agent.id, limits: overBudget.map((l) => l.name) }, now);
-    if (!observe) return refuse(429, "budget_exceeded", overBudget[0]);
+    if (!observe) return await refuse(429, "budget_exceeded", overBudget[0]);
     wouldBlock = wouldBlock ?? overBudget[0];
   }
 
   // Input scanning: what the agent is about to read.
   const suspicious = messages.find((m) => m.role !== "system" && looksLikeInjection(textOf(m.content)));
   if (suspicious) {
-    markRunUntrusted(org, agent, runId, "prompt-injection pattern in model input", now);
+    await markRunUntrusted(org, agent, runId, "prompt-injection pattern in model input", now);
     base.untrusted_input_seen = 1;
     alertOnce("injection.suspected", {
       kind: "injection.suspected", severity: "warning", title: `${agent.name} read content that looks like a prompt injection`,
@@ -159,7 +159,7 @@ export async function chatCompletion(
   }
 
   // Forward to the provider, or answer from the built-in sandbox model.
-  const secret = model.startsWith("sandbox") ? null : readSecret(org.id, "openai");
+  const secret = model.startsWith("sandbox") ? null : await readSecret(org.id, "openai");
   let completion: Record<string, unknown>;
   if (!secret || secret.mode === "sandbox") {
     const reply = sandboxModel(messages);
@@ -180,12 +180,12 @@ export async function chatCompletion(
         signal: AbortSignal.timeout(120_000),
       });
     } catch (err) {
-      insertEvent({ ...base, status: "failed", reason: `The AI provider could not be reached: ${String(err).slice(0, 200)}` });
+      await insertEvent({ ...base, status: "failed", reason: `The AI provider could not be reached: ${String(err).slice(0, 200)}` });
       return { status: 502, body: errorBody("upstream_unreachable", "AgentGuard could not reach the AI provider."), eventId: base.id, stream: false };
     }
     completion = (await res.json().catch(() => ({}))) as Record<string, unknown>;
     if (!res.ok) {
-      insertEvent({ ...base, status: "failed", reason: `The AI provider answered HTTP ${res.status}.` });
+      await insertEvent({ ...base, status: "failed", reason: `The AI provider answered HTTP ${res.status}.` });
       return { status: res.status, body: completion, eventId: base.id, stream: false };
     }
   }
@@ -201,11 +201,11 @@ export async function chatCompletion(
   const choices = completion.choices as { message?: { content?: unknown } }[] | undefined;
   const reply = choices?.[0]?.message;
   if (agent.check_responses && reply && typeof reply.content === "string" && reply.content) {
-    verdict = checkResponse({ org, agent, source: "ai_gateway", runId, now }, reply.content);
+    verdict = await checkResponse({ org, agent, source: "ai_gateway", runId, now }, reply.content);
     reply.content = verdict.text;
   }
 
-  insertEvent({
+  await insertEvent({
     ...base, cost_usd: costUsd, tokens_in: tokensIn, tokens_out: tokensOut,
     observe: observe ? 1 : 0, would_decision: wouldBlock ? "BLOCK" : "ALLOW", rules: wouldBlock ? [wouldBlock] : [], reason: wouldBlock?.detail ?? null,
     params: { ...base.params, priced: price.priced, response_check: verdict && verdict.action !== "pass" ? verdict.action : undefined },

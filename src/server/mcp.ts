@@ -21,26 +21,26 @@ import type { Agent, AgentToken, McpServer, Org } from "@/lib/types";
 
 export const BUILTIN_DEMO = "builtin:demo-shop";
 
-export function listMcpServers(orgId: string): McpServer[] {
-  return all<McpServer>("SELECT id, org_id, slug, name, url, created_at FROM mcp_servers WHERE org_id = ? ORDER BY created_at ASC", orgId);
+export async function listMcpServers(orgId: string): Promise<McpServer[]> {
+  return await all<McpServer>("SELECT id, org_id, slug, name, url, created_at FROM mcp_servers WHERE org_id = ? ORDER BY created_at ASC", orgId);
 }
 
-export function saveMcpServer(org: Org, actor: Actor, input: { slug: string; name: string; url: string; authHeader?: string }, now: number): void {
+export async function saveMcpServer(org: Org, actor: Actor, input: { slug: string; name: string; url: string; authHeader?: string }, now: number): Promise<void> {
   const slug = input.slug.trim().toLowerCase().replace(/[^a-z0-9-]+/g, "-").replace(/^-|-$/g, "");
   if (!slug) throw new Error("Give the server a short name using letters, numbers and dashes.");
   const url = input.url.trim();
   if (url !== BUILTIN_DEMO && !/^https?:\/\//.test(url)) throw new Error("The server address must start with http:// or https://");
-  run("DELETE FROM mcp_servers WHERE org_id = ? AND slug = ?", org.id, slug);
-  run(
+  await run("DELETE FROM mcp_servers WHERE org_id = ? AND slug = ?", org.id, slug);
+  await run(
     "INSERT INTO mcp_servers (id, org_id, slug, name, url, auth_header, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
     newId("mcp"), org.id, slug, input.name.trim() || slug, url, input.authHeader?.trim() ? encryptSecret(input.authHeader.trim()) : null, now,
   );
-  audit(org.id, actor, "mcp.server_saved", { type: "mcp_server", id: slug }, { name: input.name, url }, now);
+  await audit(org.id, actor, "mcp.server_saved", { type: "mcp_server", id: slug }, { name: input.name, url }, now);
 }
 
-export function deleteMcpServer(org: Org, actor: Actor, slug: string, now: number): void {
-  if (run("DELETE FROM mcp_servers WHERE org_id = ? AND slug = ?", org.id, slug)) {
-    audit(org.id, actor, "mcp.server_removed", { type: "mcp_server", id: slug }, {}, now);
+export async function deleteMcpServer(org: Org, actor: Actor, slug: string, now: number): Promise<void> {
+  if (await run("DELETE FROM mcp_servers WHERE org_id = ? AND slug = ?", org.id, slug)) {
+    await audit(org.id, actor, "mcp.server_removed", { type: "mcp_server", id: slug }, {}, now);
   }
 }
 
@@ -115,7 +115,7 @@ export async function handleMcp(
   now: number,
 ): Promise<McpResult> {
   const { org, agent, token } = auth;
-  const server = get<McpServer & { auth_header: string | null }>("SELECT * FROM mcp_servers WHERE org_id = ? AND slug = ?", org.id, slug);
+  const server = await get<McpServer & { auth_header: string | null }>("SELECT * FROM mcp_servers WHERE org_id = ? AND slug = ?", org.id, slug);
   if (!server) return { status: 404, message: rpcError(message.id, -32001, `No MCP server named "${slug}" is registered in AgentGuard.`), sessionId: null };
 
   // A stopped agent gets nothing through, including tool discovery.
@@ -128,12 +128,14 @@ export async function handleMcp(
       const up = await forward(server, message, headers);
       const result = up.message?.result as { tools?: { name: string }[] } | undefined;
       if (result?.tools) {
-        result.tools = result.tools.filter((t) => {
+        const visible: { name: string }[] = [];
+        for (const t of result.tools) {
           // Discovery: every tool the server offers becomes visible in the registry.
-          const tool = upsertTool(org.id, `${slug}.${t.name}`, now);
-          const link = getAgentTool(agent.id, tool.id) ?? sightTool(org.id, agent.id, tool.id, connectionFor("mcp_gateway"), now);
-          return link.permission !== "deny";
-        });
+          const tool = await upsertTool(org.id, `${slug}.${t.name}`, now);
+          const link = (await getAgentTool(agent.id, tool.id)) ?? (await sightTool(org.id, agent.id, tool.id, connectionFor("mcp_gateway"), now));
+          if (link.permission !== "deny") visible.push(t);
+        }
+        result.tools = visible;
       }
       return { status: 200, ...up };
     }
@@ -146,7 +148,7 @@ export async function handleMcp(
     const name = String(message.params?.name ?? "");
     const args = (message.params?.arguments as Record<string, unknown> | undefined) ?? {};
     const toolName = `${slug}.${name}`;
-    const outcome = decide({ org, agent, token, source: "mcp_gateway", now }, { tool: toolName, params: args, runId: headers.runId });
+    const outcome = await decide({ org, agent, token, source: "mcp_gateway", now }, { tool: toolName, params: args, runId: headers.runId });
     const event = outcome.event;
 
     if (outcome.outcome === "block") {
@@ -174,12 +176,12 @@ export async function handleMcp(
     try {
       up = await forward(server, message, headers);
     } catch (err) {
-      updateEvent(event.id, { status: "failed", result: { error: String(err).slice(0, 500) }, money_state: settle(false), completed_at: now });
+      await updateEvent(event.id, { status: "failed", result: { error: String(err).slice(0, 500) }, money_state: settle(false), completed_at: now });
       throw err;
     }
     const failed = !!up.message?.error || (up.message?.result as { isError?: boolean } | undefined)?.isError === true;
     const text = resultText(up.message?.result);
-    updateEvent(event.id, {
+    await updateEvent(event.id, {
       status: failed ? "failed" : "executed",
       result: up.message?.error ? { error: up.message.error.message } : { content: [{ type: "text", text: text.slice(0, 4000) }] },
       money_state: settle(!failed),
@@ -189,10 +191,10 @@ export async function handleMcp(
     // What the agent has just read. From here on, sending data outside is high risk.
     const injected = looksLikeInjection(text);
     if (!failed && (type.readsUntrusted || injected)) {
-      markRunUntrusted(org, agent, headers.runId, `${toolName}${injected ? ", which contained hidden instructions" : ""}`, now);
+      await markRunUntrusted(org, agent, headers.runId, `${toolName}${injected ? ", which contained hidden instructions" : ""}`, now);
       if (injected) {
-        audit(org.id, agentActor(agent), "injection.suspected", { type: "event", id: event.id }, { tool: toolName }, now);
-        createAlert(org, {
+        await audit(org.id, agentActor(agent), "injection.suspected", { type: "event", id: event.id }, { tool: toolName }, now);
+        await createAlert(org, {
           kind: "injection.suspected", severity: "warning", title: `${agent.name} read content with hidden instructions`,
           body: `The result of ${toolName} contains text that tries to instruct the agent. Anything it now sends outside needs a person if it can reach private data.`,
           agentId: agent.id, eventId: event.id,

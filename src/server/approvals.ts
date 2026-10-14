@@ -19,12 +19,12 @@ const parse = (r: ApprovalRow): Approval => ({
 export const APPROVER_ROLES: Role[] = ["owner", "admin", "approver"];
 export const canApprove = (role: Role) => APPROVER_ROLES.includes(role);
 
-export function getApproval(orgId: string, id: string): Approval | undefined {
-  const row = get<ApprovalRow>("SELECT * FROM approvals WHERE org_id = ? AND id = ?", orgId, id);
+export async function getApproval(orgId: string, id: string): Promise<Approval | undefined> {
+  const row = await get<ApprovalRow>("SELECT * FROM approvals WHERE org_id = ? AND id = ?", orgId, id);
   return row ? parse(row) : undefined;
 }
 
-export function listApprovals(orgId: string, opts: { status?: "pending" | "decided"; agentId?: string; limit?: number } = {}): Approval[] {
+export async function listApprovals(orgId: string, opts: { status?: "pending" | "decided"; agentId?: string; limit?: number } = {}): Promise<Approval[]> {
   const where = ["org_id = ?"];
   const params: (string | number)[] = [orgId];
   if (opts.status === "pending") where.push("status = 'pending'");
@@ -34,15 +34,15 @@ export function listApprovals(orgId: string, opts: { status?: "pending" | "decid
     params.push(opts.agentId);
   }
   const order = opts.status === "pending" ? "expires_at ASC" : "COALESCE(decided_at, created_at) DESC";
-  return all<ApprovalRow>(`SELECT * FROM approvals WHERE ${where.join(" AND ")} ORDER BY ${order} LIMIT ?`, ...params, opts.limit ?? 50).map(parse);
+  return (await all<ApprovalRow>(`SELECT * FROM approvals WHERE ${where.join(" AND ")} ORDER BY ${order} LIMIT ?`, ...params, opts.limit ?? 50)).map(parse);
 }
 
-export function countPending(orgId: string): number {
-  return get<{ n: number }>("SELECT COUNT(*) AS n FROM approvals WHERE org_id = ? AND status = 'pending'", orgId)!.n;
+export async function countPending(orgId: string): Promise<number> {
+  return (await get<{ n: number }>("SELECT COUNT(*) AS n FROM approvals WHERE org_id = ? AND status = 'pending'", orgId))!.n;
 }
 
-function approverEmails(orgId: string): string[] {
-  return all<{ email: string }>("SELECT email FROM users WHERE org_id = ? AND role IN ('owner', 'admin', 'approver')", orgId).map((u) => u.email);
+async function approverEmails(orgId: string): Promise<string[]> {
+  return (await all<{ email: string }>("SELECT email FROM users WHERE org_id = ? AND role IN ('owner', 'admin', 'approver')", orgId)).map((u) => u.email);
 }
 
 export function describeEvent(e: ActionEvent): string {
@@ -51,16 +51,16 @@ export function describeEvent(e: ActionEvent): string {
   return `${what}${amount}${e.resource ? ` on ${e.resource}` : ""}`;
 }
 
-export function createApproval(
+export async function createApproval(
   org: Org,
   agent: Agent,
   event: ActionEvent,
   input: { facts: Fact[]; explanation: string | null; required: number; kind?: "action" | "response" },
   now: number,
   live: boolean,
-): Approval {
+): Promise<Approval> {
   const id = newId("apr");
-  run(
+  await run(
     `INSERT INTO approvals (id, org_id, event_id, agent_id, kind, fingerprint, status, required, facts, explanation, expires_at, created_at)
      VALUES (?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?)`,
     id,
@@ -80,18 +80,18 @@ export function createApproval(
   const link = `${publicUrl()}/approvals/${id}`;
   const summary = `${agent.name} wants to: ${describeEvent(event)}`;
   notifySlack(org, "approval.requested", `:raised_hand: *Approval needed* — ${summary}\n${event.reason ?? ""}\nReview and decide: ${link}`, now, live);
-  queueEmail(org, "approval.requested", approverEmails(org.id), `Approval needed: ${summary}`, link, now, live);
-  return getApproval(org.id, id)!;
+  queueEmail(org, "approval.requested", await approverEmails(org.id), `Approval needed: ${summary}`, link, now, live);
+  return (await getApproval(org.id, id))!;
 }
 
 /** Applies timeouts. There is no background worker; this runs whenever approvals are read or decided. */
-export function expireOverdue(org: Org, now: number, live = true): void {
-  const overdue = all<ApprovalRow>("SELECT * FROM approvals WHERE org_id = ? AND status = 'pending' AND expires_at <= ?", org.id, now).map(parse);
+export async function expireOverdue(org: Org, now: number, live = true): Promise<void> {
+  const overdue = (await all<ApprovalRow>("SELECT * FROM approvals WHERE org_id = ? AND status = 'pending' AND expires_at <= ?", org.id, now)).map(parse);
   for (const approval of overdue) {
     if (org.settings.timeoutBehaviour === "escalate" && !approval.escalated_at) {
-      run("UPDATE approvals SET escalated_at = ?, expires_at = ? WHERE id = ?", now, now + org.settings.approvalTimeoutMinutes * 60_000, approval.id);
-      audit(org.id, SYSTEM, "approval.escalated", { type: "approval", id: approval.id }, { event_id: approval.event_id }, now);
-      createAlert(
+      await run("UPDATE approvals SET escalated_at = ?, expires_at = ? WHERE id = ?", now, now + org.settings.approvalTimeoutMinutes * 60_000, approval.id);
+      await audit(org.id, SYSTEM, "approval.escalated", { type: "approval", id: approval.id }, { event_id: approval.event_id }, now);
+      await createAlert(
         org,
         { kind: "approval.escalated", severity: "warning", title: "An approval is waiting past its deadline", body: "Nobody decided in time, so it has been escalated to owners and admins.", agentId: approval.agent_id, eventId: approval.event_id },
         now,
@@ -99,13 +99,13 @@ export function expireOverdue(org: Org, now: number, live = true): void {
       );
       continue;
     }
-    tx(() => {
-      run("UPDATE approvals SET status = 'expired', decided_at = ? WHERE id = ?", now, approval.id);
-      const event = getEvent(org.id, approval.event_id);
+    await tx(async () => {
+      await run("UPDATE approvals SET status = 'expired', decided_at = ? WHERE id = ?", now, approval.id);
+      const event = await getEvent(org.id, approval.event_id);
       if (event && event.status === "pending") {
-        updateEvent(event.id, { status: "expired", reason: "Nobody decided before the deadline, so the request was safely rejected.", completed_at: now });
+        await updateEvent(event.id, { status: "expired", reason: "Nobody decided before the deadline, so the request was safely rejected.", completed_at: now });
       }
-      audit(org.id, SYSTEM, "approval.expired", { type: "approval", id: approval.id }, { event_id: approval.event_id }, now);
+      await audit(org.id, SYSTEM, "approval.expired", { type: "approval", id: approval.id }, { event_id: approval.event_id }, now);
     });
     emitWebhook(org, "approval.decided", { approval_id: approval.id, event_id: approval.event_id, status: "expired" }, now, live);
   }
@@ -118,7 +118,7 @@ export interface DecideResult {
   execute: boolean;
 }
 
-export function decideApproval(
+export async function decideApproval(
   org: Org,
   user: Pick<User, "id" | "name" | "role" | "org_id">,
   id: string,
@@ -127,15 +127,15 @@ export function decideApproval(
   channel: ApprovalDecision["channel"],
   now: number,
   live = true,
-): DecideResult {
+): Promise<DecideResult> {
   if (user.org_id !== org.id || !canApprove(user.role)) throw new Error("You are not authorized to approve actions.");
-  expireOverdue(org, now, live);
+  await expireOverdue(org, now, live);
 
-  const result = tx(() => {
-    const approval = getApproval(org.id, id);
+  const result = await tx(async () => {
+    const approval = await getApproval(org.id, id);
     if (!approval) throw new Error("Approval not found.");
     if (approval.status !== "pending") throw new Error(`This request was already ${approval.status}.`);
-    const event = getEvent(org.id, approval.event_id);
+    const event = await getEvent(org.id, approval.event_id);
     if (!event || event.status !== "pending") throw new Error("This action is no longer waiting for approval.");
     if (approval.decisions.some((d) => d.user_id === user.id)) throw new Error("You have already decided on this request. A second person must confirm it.");
 
@@ -145,22 +145,25 @@ export function decideApproval(
     const details = { event_id: event.id, fingerprint: approval.fingerprint, channel, note: note.trim() || undefined };
 
     if (decision === "reject") {
-      run("UPDATE approvals SET status = 'rejected', decisions = ?, decided_at = ? WHERE id = ?", JSON.stringify(decisions), now, id);
-      updateEvent(event.id, { status: "rejected", reason: `Rejected by ${user.name}${note.trim() ? `: ${note.trim()}` : "."}`, completed_at: now });
-      audit(org.id, actor, "approval.rejected", { type: "approval", id }, details, now);
+      await run("UPDATE approvals SET status = 'rejected', decisions = ?, decided_at = ? WHERE id = ?", JSON.stringify(decisions), now, id);
+      await updateEvent(event.id, { status: "rejected", reason: `Rejected by ${user.name}${note.trim() ? `: ${note.trim()}` : "."}`, completed_at: now });
+      await audit(org.id, actor, "approval.rejected", { type: "approval", id }, details, now);
     } else if (approvals >= approval.required) {
-      run("UPDATE approvals SET status = 'approved', decisions = ?, decided_at = ? WHERE id = ?", JSON.stringify(decisions), now, id);
-      updateEvent(event.id, {
+      await run("UPDATE approvals SET status = 'approved', decisions = ?, decided_at = ? WHERE id = ?", JSON.stringify(decisions), now, id);
+      await updateEvent(event.id, {
         status: "approved",
         // Reserve now, settle when the action completes, so parallel agents cannot overspend together.
         money_state: event.amount !== null && getAction(event.action).money ? "reserved" : event.money_state,
       });
-      audit(org.id, actor, "approval.approved", { type: "approval", id }, { ...details, approvers: decisions.map((d) => d.user_name) }, now);
+      await audit(org.id, actor, "approval.approved", { type: "approval", id }, { ...details, approvers: decisions.map((d) => d.user_name) }, now);
     } else {
-      run("UPDATE approvals SET decisions = ? WHERE id = ?", JSON.stringify(decisions), id);
-      audit(org.id, actor, "approval.first_approval", { type: "approval", id }, { ...details, still_needed: approval.required - approvals }, now);
+      await run("UPDATE approvals SET decisions = ? WHERE id = ?", JSON.stringify(decisions), id);
+      await audit(org.id, actor, "approval.first_approval", { type: "approval", id }, { ...details, still_needed: approval.required - approvals }, now);
     }
-    return { approval: getApproval(org.id, id)!, event: getEvent(org.id, event.id)! };
+    const nextApproval = await getApproval(org.id, id);
+    const nextEvent = await getEvent(org.id, event.id);
+    if (!nextApproval || !nextEvent) throw new Error("Approval or event missing after decision.");
+    return { approval: nextApproval, event: nextEvent };
   });
 
   if (result.approval.status !== "pending") {

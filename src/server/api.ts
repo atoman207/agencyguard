@@ -49,9 +49,9 @@ export async function readJson(request: Request): Promise<Record<string, unknown
 export type AgentAuth = Extract<TokenAuth, { ok: true }>;
 
 /** Authenticates an agent by its AgentGuard token. Throws a RequestError that maps to 401. */
-export function agentAuth(request: Request): AgentAuth {
+export async function agentAuth(request: Request): Promise<AgentAuth> {
   const header = request.headers.get("authorization") ?? request.headers.get("x-api-key");
-  const auth = authenticateToken(header, Date.now());
+  const auth = await authenticateToken(header, Date.now());
   if (!auth.ok) throw new RequestError(auth.message, auth.status, auth.code);
   return auth;
 }
@@ -67,11 +67,11 @@ export interface ManagementAuth {
 export async function managementAuth(request: Request, min: Role = "admin"): Promise<ManagementAuth> {
   const bearer = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "").trim();
   if (bearer) {
-    const key = orgForApiKey(bearer);
+    const key = await orgForApiKey(bearer);
     if (!key) throw new RequestError("This API key is not recognised.", 401, "invalid_api_key");
-    return { org: getOrg(key.orgId), actor: { type: "system", id: key.keyId, label: `API key "${key.name}"` }, role: "admin", user: null };
+    return { org: await getOrg(key.orgId), actor: { type: "system", id: key.keyId, label: `API key "${key.name}"` }, role: "admin", user: null };
   }
-  return sessionAuth(min);
+  return await sessionAuth(min);
 }
 
 /** For endpoints only a signed-in person may call, such as approving an action. */

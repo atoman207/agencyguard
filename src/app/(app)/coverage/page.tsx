@@ -12,7 +12,7 @@ export const metadata: Metadata = { title: "Coverage" };
 
 export default async function CoveragePage() {
   const { org } = await requireSession();
-  const cov = coverage(org);
+  const cov = await coverage(org);
 
   return (
     <>

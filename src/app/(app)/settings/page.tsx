@@ -23,7 +23,7 @@ export default async function SettingsPage() {
   const { org, user, now } = await requireSession();
   const s = org.settings;
   const owner = atLeast(user.role, "owner");
-  const users = listUsers(org.id);
+  const users = await listUsers(org.id);
   const tz = s.timezone;
   const disabled = !owner;
 
@@ -35,8 +35,8 @@ export default async function SettingsPage() {
       </>
     );
   }
-  const keys = owner ? listApiKeys(org.id) : [];
-  const outbox = listOutbox(org.id, 10);
+  const keys = owner ? await listApiKeys(org.id) : [];
+  const outbox = await listOutbox(org.id, 10);
 
   return (
     <>

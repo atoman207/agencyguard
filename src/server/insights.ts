@@ -48,8 +48,8 @@ interface SlimEvent {
   created_at: number;
 }
 
-function recentEvents(orgId: string, since: number): SlimEvent[] {
-  return all<SlimEvent>(
+async function recentEvents(orgId: string, since: number): Promise<SlimEvent[]> {
+  return await all<SlimEvent>(
     "SELECT agent_id, action, would_decision, status, observe, cost_usd, amount, money_state, created_at FROM events WHERE org_id = ? AND created_at >= ?",
     orgId,
     since,
@@ -57,7 +57,7 @@ function recentEvents(orgId: string, since: number): SlimEvent[] {
 }
 
 /** The last seven days, bucketed by calendar day in the organization's time zone. */
-export function overview(org: Org, now: number): Overview {
+export async function overview(org: Org, now: number): Promise<Overview> {
   const tz = org.settings.timezone;
   const days: DayBucket[] = [];
   for (let i = 6; i >= 0; i--) {
@@ -71,7 +71,7 @@ export function overview(org: Org, now: number): Overview {
   const byKey = new Map(days.map((d) => [d.key, d]));
   const out: Overview = { actions: 0, asked: 0, blocked: 0, aiCost: 0, aiCalls: 0, moneyMoved: 0, pending: 0, days, observeFindings: 0 };
 
-  for (const e of recentEvents(org.id, now - 7 * DAY)) {
+  for (const e of await recentEvents(org.id, now - 7 * DAY)) {
     const bucket = byKey.get(dayKey(e.created_at, tz));
     out.aiCost += e.cost_usd;
     if (bucket) bucket.cost += e.cost_usd;
@@ -88,7 +88,7 @@ export function overview(org: Org, now: number): Overview {
     if (e.observe && kind !== "allowed") out.observeFindings++;
     if (bucket) bucket[kind]++;
   }
-  out.pending = get<{ n: number }>("SELECT COUNT(*) AS n FROM approvals WHERE org_id = ? AND status = 'pending'", org.id)!.n;
+  out.pending = (await get<{ n: number }>("SELECT COUNT(*) AS n FROM approvals WHERE org_id = ? AND status = 'pending'", org.id))!.n;
   return out;
 }
 
@@ -134,10 +134,10 @@ function health(agent: Agent, s: { actions: number; asked: number; blocked: numb
   return { score, label: score >= 85 ? "Healthy" : score >= 65 ? "Watch" : "Needs attention", parts };
 }
 
-export function agentStats(org: Org, now: number): AgentStats[] {
-  const events = recentEvents(org.id, now - 7 * DAY);
-  const lastSeen = new Map(all<{ agent_id: string; t: number }>("SELECT agent_id, MAX(created_at) AS t FROM events WHERE org_id = ? GROUP BY agent_id", org.id).map((r) => [r.agent_id, r.t]));
-  return listAgents(org.id).map((agent) => {
+export async function agentStats(org: Org, now: number): Promise<AgentStats[]> {
+  const events = await recentEvents(org.id, now - 7 * DAY);
+  const lastSeen = new Map((await all<{ agent_id: string; t: number }>("SELECT agent_id, MAX(created_at) AS t FROM events WHERE org_id = ? GROUP BY agent_id", org.id)).map((r) => [r.agent_id, r.t]));
+  return (await listAgents(org.id)).map((agent) => {
     const s = { actions: 0, asked: 0, blocked: 0, failed: 0, cost: 0, costRecent: 0, costEarlier: 0 };
     for (const e of events) {
       if (e.agent_id !== agent.id) continue;
@@ -194,10 +194,10 @@ function share(rows: CoverageRow[]): CoverageShare {
 }
 
 /** Which agents and tools are enforced, cooperative or not covered, weighted by risk. */
-export function coverage(org: Org): Coverage {
-  const rotated = new Map(listCredentials(org.id).map((c) => [c.connector, c]));
-  const links = listAgentTools(org.id);
-  const agents = listAgents(org.id).map((agent) => {
+export async function coverage(org: Org): Promise<Coverage> {
+  const rotated = new Map((await listCredentials(org.id)).map((c) => [c.connector, c]));
+  const links = await listAgentTools(org.id);
+  const agents = (await listAgents(org.id)).map((agent) => {
     const rows: CoverageRow[] = links
       .filter((l) => l.agent_id === agent.id)
       .map((l) => {
@@ -234,10 +234,10 @@ export interface Recommendation {
 }
 
 /** Suggestions drawn from real activity. Each one is for a person to accept; nothing changes by itself. */
-export function recommendations(org: Org, now: number): Recommendation[] {
+export async function recommendations(org: Org, now: number): Promise<Recommendation[]> {
   const out: Recommendation[] = [];
-  const stats = agentStats(org, now);
-  const cov = coverage(org);
+  const stats = await agentStats(org, now);
+  const cov = await coverage(org);
 
   for (const s of stats) {
     if (s.agent.mode === "observe" && s.agent.status === "active" && s.asked + s.blocked > 0) {
@@ -260,7 +260,7 @@ export function recommendations(org: Org, now: number): Recommendation[] {
   }
 
   // Approvals that always end the same way are candidates for a rule.
-  const patterns = all<{ action: string; approved: number; rejected: number; top: number | null }>(
+  const patterns = await all<{ action: string; approved: number; rejected: number; top: number | null }>(
     `SELECT e.action AS action,
             SUM(CASE WHEN a.status = 'approved' THEN 1 ELSE 0 END) AS approved,
             SUM(CASE WHEN a.status = 'rejected' THEN 1 ELSE 0 END) AS rejected,
@@ -282,12 +282,12 @@ export function recommendations(org: Org, now: number): Recommendation[] {
     }
   }
 
-  const budgeted = new Set(listLimits(org.id).filter((l) => l.kind === "cost" && l.enabled).map((l) => l.agent_id ?? "*"));
+  const budgeted = new Set((await listLimits(org.id)).filter((l) => l.kind === "cost" && l.enabled).map((l) => l.agent_id ?? "*"));
   const unbudgeted = stats.filter((s) => s.cost > 0 && !budgeted.has("*") && !budgeted.has(s.agent.id));
   if (unbudgeted.length) {
     out.push({ tone: "info", title: `${unbudgeted.length} ${unbudgeted.length === 1 ? "agent has" : "agents have"} no AI budget`, body: `${unbudgeted.map((s) => s.agent.name).join(", ")} can spend on AI models without a ceiling.`, href: "/limits", cta: "Set a budget" });
   }
-  if (listRules(org.id).length === 0) {
+  if ((await listRules(org.id)).length === 0) {
     out.push({ tone: "info", title: "No rules yet", body: "Start from a template for your kind of agent, then adjust it.", href: "/rules", cta: "Browse templates" });
   }
   return out;
@@ -301,12 +301,12 @@ export interface JourneyStep {
 }
 
 /** The customer journey from the product document, with each step judged from the workspace's own state. */
-export function journey(org: Org): JourneyStep[] {
-  const agents = listAgents(org.id);
-  const hasEvents = !!get("SELECT 1 AS x FROM events WHERE org_id = ? LIMIT 1", org.id);
-  const rules = listRules(org.id).filter((r) => r.enabled);
+export async function journey(org: Org): Promise<JourneyStep[]> {
+  const agents = await listAgents(org.id);
+  const hasEvents = !!await get("SELECT 1 AS x FROM events WHERE org_id = ? LIMIT 1", org.id);
+  const rules = (await listRules(org.id)).filter((r) => r.enabled);
   const enforcing = agents.filter((a) => a.mode === "enforce");
-  const enforcedMoney = !!get(
+  const enforcedMoney = !!await get(
     "SELECT 1 AS x FROM events WHERE org_id = ? AND enforcement = 'enforced' AND action IN ('payment.refund', 'payment.charge', 'payment.payout', 'data.delete', 'crm.delete') AND status = 'executed' LIMIT 1",
     org.id,
   );
@@ -315,6 +315,6 @@ export function journey(org: Org): JourneyStep[] {
     { id: "recommend", name: "Recommend", gain: "Rules suggested from real activity", done: rules.length > 0 },
     { id: "control", name: "Control", gain: "Risky actions need approval", done: rules.length > 0 && enforcing.length > 0 },
     { id: "enforce", name: "Enforce", gain: "Money actions cannot skip the rules", done: enforcedMoney },
-    { id: "scale", name: "Scale", gain: "The same rules across every agent", done: enforcing.length >= 3 && !!get("SELECT 1 AS x FROM rules WHERE org_id = ? AND template IS NOT NULL LIMIT 1", org.id) },
+    { id: "scale", name: "Scale", gain: "The same rules across every agent", done: enforcing.length >= 3 && !!await get("SELECT 1 AS x FROM rules WHERE org_id = ? AND template IS NOT NULL LIMIT 1", org.id) },
   ];
 }

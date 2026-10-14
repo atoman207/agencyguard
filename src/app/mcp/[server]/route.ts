@@ -5,7 +5,7 @@ import { handleMcp } from "@/server/mcp";
 // POST /mcp/{server} — the MCP gateway. Point the agent's MCP client here
 // instead of at the tool server, with its AgentGuard token as the bearer token.
 export const POST = route(async (request, { params }: { params: Promise<{ server: string }> }) => {
-  const auth = agentAuth(request);
+  const auth = await agentAuth(request);
   const { server } = await params;
   const message = (await readJson(request)) as unknown as JsonRpcMessage;
   const result = await handleMcp(

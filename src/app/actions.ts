@@ -48,7 +48,7 @@ async function act(min: Role, success: string | null, fn: (session: Session, now
 export async function loginAction(_: ActionState, form: FormData): Promise<ActionState> {
   try {
     await ensureSeeded();
-    const user = checkPassword(str(form, "email"), String(form.get("password") ?? ""), Date.now());
+    const user = await checkPassword(str(form, "email"), String(form.get("password") ?? ""), Date.now());
     await startSession(user.id);
   } catch (err) {
     return fail(err);
@@ -65,11 +65,11 @@ export async function signupAction(_: ActionState, form: FormData): Promise<Acti
     const avatar = form.get("avatar");
     const avatarFile = avatar instanceof File && avatar.size > 0 ? avatar : null;
     if (avatarFile) assertAvatarFile(avatarFile);
-    const user = signUp(
+    const user = await signUp(
       { orgName: str(form, "organization"), name: str(form, "name"), email: str(form, "email"), password },
       Date.now(),
     );
-    if (avatarFile) setUserAvatar(user.id, await saveAvatarFile(user.id, avatarFile));
+    if (avatarFile) await setUserAvatar(user.id, await saveAvatarFile(user.id, avatarFile));
     await startSession(user.id);
   } catch (err) {
     return fail(err);
@@ -101,70 +101,70 @@ function agentInput(form: FormData): Omit<AgentInput, "parentAgentId"> {
 
 export async function createAgentAction(_: ActionState, form: FormData): Promise<ActionState> {
   let id = "";
-  const result = await act("admin", null, ({ org, user }, now) => {
-    id = createAgent(org, userActor(user), { ...agentInput(form), parentAgentId: str(form, "parent") || null }, now).id;
+  const result = await act("admin", null, async ({ org, user }, now) => {
+    id = (await createAgent(org, userActor(user), { ...agentInput(form), parentAgentId: str(form, "parent") || null }, now)).id;
   });
   if (result?.ok && id) redirect(`/agents/${id}?new=1`);
   return result;
 }
 
 export async function updateAgentAction(_: ActionState, form: FormData): Promise<ActionState> {
-  return act("admin", "Saved.", ({ org, user }, now) => updateAgent(org, userActor(user), str(form, "id"), agentInput(form), now));
+  return act("admin", "Saved.", async ({ org, user }, now) => await updateAgent(org, userActor(user), str(form, "id"), agentInput(form), now));
 }
 
 export async function setAgentStatusAction(_: ActionState, form: FormData): Promise<ActionState> {
   const status = str(form, "status") as AgentStatus;
   const message = status === "killed" ? "The agent is stopped. Its tokens are revoked and its pending requests rejected." : status === "paused" ? "The agent is paused." : "The agent is active again.";
-  return act("admin", message, ({ org, user }, now) => {
+  return act("admin", message, async ({ org, user }, now) => {
     if (!["active", "paused", "killed"].includes(status)) throw new Error("Unknown status.");
-    setAgentStatus(org, userActor(user), str(form, "id"), status, str(form, "reason"), now);
+    await setAgentStatus(org, userActor(user), str(form, "id"), status, str(form, "reason"), now);
   });
 }
 
 export async function deleteAgentAction(_: ActionState, form: FormData): Promise<ActionState> {
-  const result = await act("admin", "Agent deleted.", ({ org, user }, now) => deleteAgent(org, userActor(user), str(form, "id"), now));
+  const result = await act("admin", "Agent deleted.", async ({ org, user }, now) => await deleteAgent(org, userActor(user), str(form, "id"), now));
   if (result?.ok) redirect("/agents");
   return result;
 }
 
 export async function createTokenAction(_: ActionState, form: FormData): Promise<ActionState> {
-  return act("admin", null, ({ org, user }, now) => {
+  return act("admin", null, async ({ org, user }, now) => {
     const scopes = str(form, "scopes").split(/[\s,]+/).filter(Boolean);
     const days = Number(str(form, "expires"));
-    const { token } = createToken(org, userActor(user), str(form, "agent"), { name: str(form, "name") || "Token", scopes, expiresInDays: days > 0 ? days : null }, now);
+    const { token } = await createToken(org, userActor(user), str(form, "agent"), { name: str(form, "name") || "Token", scopes, expiresInDays: days > 0 ? days : null }, now);
     return { ok: true, data: { token } };
   });
 }
 
 export async function revokeTokenAction(_: ActionState, form: FormData): Promise<ActionState> {
-  return act("admin", "Token revoked.", ({ org, user }, now) => revokeToken(org, userActor(user), str(form, "id"), now));
+  return act("admin", "Token revoked.", async ({ org, user }, now) => await revokeToken(org, userActor(user), str(form, "id"), now));
 }
 
 // --- tools ---------------------------------------------------------------------
 
 export async function classifyToolAction(_: ActionState, form: FormData): Promise<ActionState> {
-  return act("admin", "Classified.", ({ org, user }, now) => classifyTool(org, userActor(user), str(form, "id"), str(form, "action"), now));
+  return act("admin", "Classified.", async ({ org, user }, now) => await classifyTool(org, userActor(user), str(form, "id"), str(form, "action"), now));
 }
 
 export async function setToolPermissionAction(_: ActionState, form: FormData): Promise<ActionState> {
-  return act("admin", null, ({ org, user }, now) => setToolPermission(org, userActor(user), str(form, "agent"), str(form, "tool"), str(form, "permission") as ToolPermission, now));
+  return act("admin", null, async ({ org, user }, now) => await setToolPermission(org, userActor(user), str(form, "agent"), str(form, "tool"), str(form, "permission") as ToolPermission, now));
 }
 
 export async function declareToolAction(_: ActionState, form: FormData): Promise<ActionState> {
-  return act("admin", "Added to the agent's inventory.", ({ org, user }, now) => {
+  return act("admin", "Added to the agent's inventory.", async ({ org, user }, now) => {
     const name = str(form, "name");
     if (!name) throw new Error("Give the tool a name.");
-    if (!getAgent(org.id, str(form, "agent"))) throw new Error("Agent not found.");
-    declareTool(org, userActor(user), str(form, "agent"), { name, action: str(form, "action"), connection: (str(form, "connection") || "uncovered") as Connection }, now);
+    if (!await getAgent(org.id, str(form, "agent"))) throw new Error("Agent not found.");
+    await declareTool(org, userActor(user), str(form, "agent"), { name, action: str(form, "action"), connection: (str(form, "connection") || "uncovered") as Connection }, now);
   });
 }
 
 export async function removeAgentToolAction(_: ActionState, form: FormData): Promise<ActionState> {
-  return act("admin", null, ({ org, user }, now) => removeAgentTool(org, userActor(user), str(form, "agent"), str(form, "tool"), now));
+  return act("admin", null, async ({ org, user }, now) => await removeAgentTool(org, userActor(user), str(form, "agent"), str(form, "tool"), now));
 }
 
 export async function deleteToolAction(_: ActionState, form: FormData): Promise<ActionState> {
-  return act("admin", "Tool removed.", ({ org, user }, now) => deleteTool(org, userActor(user), str(form, "id"), now));
+  return act("admin", "Tool removed.", async ({ org, user }, now) => await deleteTool(org, userActor(user), str(form, "id"), now));
 }
 
 // --- approvals -------------------------------------------------------------------
@@ -195,41 +195,41 @@ function ruleInput(form: FormData): RuleInput {
 
 export async function saveRuleAction(_: ActionState, form: FormData): Promise<ActionState> {
   const id = str(form, "id");
-  const result = await act("admin", null, ({ org, user }, now) => {
-    if (id) updateRule(org, userActor(user), id, ruleInput(form), now);
-    else createRule(org, userActor(user), ruleInput(form), now);
+  const result = await act("admin", null, async ({ org, user }, now) => {
+    if (id) await updateRule(org, userActor(user), id, ruleInput(form), now);
+    else await createRule(org, userActor(user), ruleInput(form), now);
   });
   if (result?.ok) redirect("/rules");
   return result;
 }
 
 export async function replayRuleAction(_: ActionState, form: FormData): Promise<ActionState> {
-  return act("viewer", null, ({ org }, now) => {
+  return act("viewer", null, async ({ org }, now) => {
     const input = ruleInput(form);
-    const replay = replayRule(org, { conditions: input.conditions, effect: input.effect, agentId: input.agentId }, 7, now);
+    const replay = await replayRule(org, { conditions: input.conditions, effect: input.effect, agentId: input.agentId }, 7, now);
     return { ok: true, data: { replay } };
   });
 }
 
 export async function toggleRuleAction(_: ActionState, form: FormData): Promise<ActionState> {
-  return act("admin", null, ({ org, user }, now) => setRuleEnabled(org, userActor(user), str(form, "id"), flag(form, "enabled"), now));
+  return act("admin", null, async ({ org, user }, now) => await setRuleEnabled(org, userActor(user), str(form, "id"), flag(form, "enabled"), now));
 }
 
 export async function deleteRuleAction(_: ActionState, form: FormData): Promise<ActionState> {
-  const result = await act("admin", null, ({ org, user }, now) => deleteRule(org, userActor(user), str(form, "id"), now));
+  const result = await act("admin", null, async ({ org, user }, now) => await deleteRule(org, userActor(user), str(form, "id"), now));
   if (result?.ok && flag(form, "redirect")) redirect("/rules");
   return result;
 }
 
 export async function installTemplateAction(_: ActionState, form: FormData): Promise<ActionState> {
-  return act("admin", "Installed. Review the rules below.", ({ org, user }, now) =>
-    installTemplate(org, userActor(user), str(form, "template"), { agentId: str(form, "agent") || null, enable: flag(form, "enable") }, now),
+  return act("admin", "Installed. Review the rules below.", async ({ org, user }, now) =>
+    await installTemplate(org, userActor(user), str(form, "template"), { agentId: str(form, "agent") || null, enable: flag(form, "enable") }, now),
   );
 }
 
 export async function uninstallTemplateAction(_: ActionState, form: FormData): Promise<ActionState> {
-  return act("admin", "Template removed. Its rules and limits were deleted.", ({ org, user }, now) =>
-    uninstallTemplate(org, userActor(user), str(form, "template"), now),
+  return act("admin", "Template removed. Its rules and limits were deleted.", async ({ org, user }, now) =>
+    await uninstallTemplate(org, userActor(user), str(form, "template"), now),
   );
 }
 
@@ -247,56 +247,56 @@ function limitInput(form: FormData) {
 }
 
 export async function createLimitAction(_: ActionState, form: FormData): Promise<ActionState> {
-  return act("admin", "Limit added.", ({ org, user }, now) => {
-    createLimit(org, userActor(user), limitInput(form), now);
+  return act("admin", "Limit added.", async ({ org, user }, now) => {
+    await createLimit(org, userActor(user), limitInput(form), now);
   });
 }
 
 export async function updateLimitAction(_: ActionState, form: FormData): Promise<ActionState> {
-  return act("admin", "Limit updated.", ({ org, user }, now) => {
-    updateLimit(org, userActor(user), str(form, "id"), limitInput(form), now);
+  return act("admin", "Limit updated.", async ({ org, user }, now) => {
+    await updateLimit(org, userActor(user), str(form, "id"), limitInput(form), now);
   });
 }
 
 export async function toggleLimitAction(_: ActionState, form: FormData): Promise<ActionState> {
-  return act("admin", null, ({ org, user }, now) => setLimitEnabled(org, userActor(user), str(form, "id"), flag(form, "enabled"), now));
+  return act("admin", null, async ({ org, user }, now) => await setLimitEnabled(org, userActor(user), str(form, "id"), flag(form, "enabled"), now));
 }
 
 export async function deleteLimitAction(_: ActionState, form: FormData): Promise<ActionState> {
-  return act("admin", null, ({ org, user }, now) => deleteLimit(org, userActor(user), str(form, "id"), now));
+  return act("admin", null, async ({ org, user }, now) => await deleteLimit(org, userActor(user), str(form, "id"), now));
 }
 
 // --- vault -----------------------------------------------------------------------
 
 export async function saveCredentialAction(_: ActionState, form: FormData): Promise<ActionState> {
-  return act("admin", "Connected. The key is stored encrypted and is never shown again.", ({ org, user }, now) =>
-    saveCredential(org, userActor(user), { connector: str(form, "connector"), mode: str(form, "mode") === "live" ? "live" : "sandbox", apiKey: String(form.get("api_key") ?? ""), baseUrl: str(form, "base_url") || undefined }, now),
+  return act("admin", "Connected. The key is stored encrypted and is never shown again.", async ({ org, user }, now) =>
+    await saveCredential(org, userActor(user), { connector: str(form, "connector"), mode: str(form, "mode") === "live" ? "live" : "sandbox", apiKey: String(form.get("api_key") ?? ""), baseUrl: str(form, "base_url") || undefined }, now),
   );
 }
 
 export async function deleteCredentialAction(_: ActionState, form: FormData): Promise<ActionState> {
-  return act("admin", "Disconnected.", ({ org, user }, now) => deleteCredential(org, userActor(user), str(form, "connector"), now));
+  return act("admin", "Disconnected.", async ({ org, user }, now) => await deleteCredential(org, userActor(user), str(form, "connector"), now));
 }
 
 export async function setKeysRotatedAction(_: ActionState, form: FormData): Promise<ActionState> {
-  return act("admin", null, ({ org, user }, now) => setKeysRotated(org, userActor(user), str(form, "connector"), flag(form, "rotated"), now));
+  return act("admin", null, async ({ org, user }, now) => await setKeysRotated(org, userActor(user), str(form, "connector"), flag(form, "rotated"), now));
 }
 
 export async function saveMcpServerAction(_: ActionState, form: FormData): Promise<ActionState> {
-  return act("admin", "MCP server registered.", ({ org, user }, now) =>
-    saveMcpServer(org, userActor(user), { slug: str(form, "slug"), name: str(form, "name"), url: str(form, "url"), authHeader: str(form, "auth_header") || undefined }, now),
+  return act("admin", "MCP server registered.", async ({ org, user }, now) =>
+    await saveMcpServer(org, userActor(user), { slug: str(form, "slug"), name: str(form, "name"), url: str(form, "url"), authHeader: str(form, "auth_header") || undefined }, now),
   );
 }
 
 export async function deleteMcpServerAction(_: ActionState, form: FormData): Promise<ActionState> {
-  return act("admin", null, ({ org, user }, now) => deleteMcpServer(org, userActor(user), str(form, "slug"), now));
+  return act("admin", null, async ({ org, user }, now) => await deleteMcpServer(org, userActor(user), str(form, "slug"), now));
 }
 
 // --- settings ----------------------------------------------------------------------
 
 /** Each settings form posts its fields as one JSON document in `patch`. */
 export async function updateSettingsAction(_: ActionState, form: FormData): Promise<ActionState> {
-  return act("owner", "Saved.", ({ org, user }, now) => {
+  return act("owner", "Saved.", async ({ org, user }, now) => {
     let patch: Record<string, unknown>;
     try {
       patch = JSON.parse(str(form, "patch") || "{}");
@@ -305,37 +305,37 @@ export async function updateSettingsAction(_: ActionState, form: FormData): Prom
     }
     const name = str(form, "org_name");
     if (name && name !== org.name) {
-      renameOrg(org.id, name);
-      audit(org.id, userActor(user), "organization.renamed", { type: "organization", id: org.id }, { from: org.name, to: name }, now);
+      await renameOrg(org.id, name);
+      await audit(org.id, userActor(user), "organization.renamed", { type: "organization", id: org.id }, { from: org.name, to: name }, now);
     }
-    updateSettings(org, userActor(user), patch, now);
+    await updateSettings(org, userActor(user), patch, now);
   });
 }
 
 export async function addMemberAction(_: ActionState, form: FormData): Promise<ActionState> {
-  return act("owner", "Member added. Pass the password on to them yourself.", ({ org, user }, now) => {
-    addMember(org, userActor(user), { name: str(form, "name"), email: str(form, "email"), role: str(form, "role") as Role, password: String(form.get("password") ?? "") }, now);
+  return act("owner", "Member added. Pass the password on to them yourself.", async ({ org, user }, now) => {
+    await addMember(org, userActor(user), { name: str(form, "name"), email: str(form, "email"), role: str(form, "role") as Role, password: String(form.get("password") ?? "") }, now);
   });
 }
 
 export async function changeRoleAction(_: ActionState, form: FormData): Promise<ActionState> {
-  return act("owner", null, ({ org, user }, now) => changeRole(org, userActor(user), str(form, "id"), str(form, "role") as Role, now));
+  return act("owner", null, async ({ org, user }, now) => await changeRole(org, userActor(user), str(form, "id"), str(form, "role") as Role, now));
 }
 
 export async function removeMemberAction(_: ActionState, form: FormData): Promise<ActionState> {
-  return act("owner", null, ({ org, user }, now) => removeMember(org, userActor(user), str(form, "id"), now));
+  return act("owner", null, async ({ org, user }, now) => await removeMember(org, userActor(user), str(form, "id"), now));
 }
 
 export async function createApiKeyAction(_: ActionState, form: FormData): Promise<ActionState> {
-  return act("owner", null, ({ org, user }, now) => ({ ok: true, data: { key: createApiKey(org, userActor(user), str(form, "name"), now) } }));
+  return act("owner", null, async ({ org, user }, now) => ({ ok: true, data: { key: await createApiKey(org, userActor(user), str(form, "name"), now) } }));
 }
 
 export async function revokeApiKeyAction(_: ActionState, form: FormData): Promise<ActionState> {
-  return act("owner", null, ({ org, user }, now) => revokeApiKey(org, userActor(user), str(form, "id"), now));
+  return act("owner", null, async ({ org, user }, now) => await revokeApiKey(org, userActor(user), str(form, "id"), now));
 }
 
 export async function acknowledgeAlertsAction(_: ActionState, form: FormData): Promise<ActionState> {
-  return act("approver", null, ({ org }, now) => acknowledgeAlerts(org.id, now, str(form, "id") || undefined));
+  return act("approver", null, async ({ org }, now) => await acknowledgeAlerts(org.id, now, str(form, "id") || undefined));
 }
 
 // --- playground ----------------------------------------------------------------------

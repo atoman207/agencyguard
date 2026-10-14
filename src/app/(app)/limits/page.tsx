@@ -34,7 +34,7 @@ function describe(l: Limit, agentName?: string): string {
 }
 
 /** The fill carries severity; the track is a lighter step of the same colour. */
-function Meter({ used, limit }: { used: number; limit: Limit }) {
+async function Meter({ used, limit }: { used: number; limit: Limit }) {
   const ratio = used / limit.value;
   const tone = ratio >= 1 ? ["bg-simrik-100", "bg-simrik-500"] : ratio >= 0.7 ? ["bg-marigold-100", "bg-marigold-500"] : ["bg-himal-100", "bg-himal-500"];
   return (
@@ -51,8 +51,8 @@ function Meter({ used, limit }: { used: number; limit: Limit }) {
 
 export default async function LimitsPage() {
   const { org, user, now } = await requireSession();
-  const usage = limitUsage(org, now);
-  const agents = listAgents(org.id);
+  const usage = await limitUsage(org, now);
+  const agents = await listAgents(org.id);
   const agentName = new Map(agents.map((a) => [a.id, a.name]));
   const canEdit = atLeast(user.role, "admin");
 

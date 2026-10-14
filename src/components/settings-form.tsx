@@ -76,7 +76,7 @@ export function Toggle({ name, defaultChecked, title, hint }: { name: string; de
 }
 
 /** Company-approved wording for sensitive topics. Saved as a whole list on every change. */
-export function ApprovedAnswersEditor({ answers, canEdit }: { answers: ApprovedAnswer[]; canEdit: boolean }) {
+export async function ApprovedAnswersEditor({ answers, canEdit }: { answers: ApprovedAnswer[]; canEdit: boolean }) {
   const [list, setList] = useState(answers);
   const [editingId, setEditingId] = useState<string | null>(null);
 

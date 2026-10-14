@@ -7,7 +7,7 @@ import { getConnector, prepare } from "@/server/vault";
 // The agent never holds the real key: it asks the vault, the rules run, and
 // AgentGuard performs the action itself, exactly once.
 export const POST = route(async (request, { params }: { params: Promise<{ connector: string; action: string }> }) => {
-  const auth = agentAuth(request);
+  const auth = await agentAuth(request);
   const { connector, action } = await params;
   const def = getConnector(connector)?.actions.find((a) => a.id === action);
   if (!def) throw new RequestError(`The vault has no action "${connector}/${action}".`, 404, "not_found");
@@ -18,7 +18,7 @@ export const POST = route(async (request, { params }: { params: Promise<{ connec
   // Facts come from the source system before any rule runs.
   const prepared = await prepare(auth.org, connector, def, raw);
 
-  const outcome = decide(
+  const outcome = await decide(
     { org: auth.org, agent: auth.agent, token: auth.token, source: "vault", now },
     {
       tool: `${connector}.${action}`,

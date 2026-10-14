@@ -16,7 +16,7 @@ const PAGE = 40;
 export default async function ActivityPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   const { org } = await requireSession();
   const sp = await searchParams;
-  const agents = listAgents(org.id);
+  const agents = await listAgents(org.id);
   const page = Math.max(1, Number(sp.page) || 1);
   const show = sp.show ?? "actions";
   const filters: EventFilters = {
@@ -28,8 +28,8 @@ export default async function ActivityPage({ searchParams }: { searchParams: Pro
     hideModelCalls: show === "actions",
     action: show === "model" ? "ai.completion" : undefined,
   };
-  const total = countEvents(org.id, filters);
-  const events = listEvents(org.id, { ...filters, limit: PAGE, offset: (page - 1) * PAGE });
+  const total = await countEvents(org.id, filters);
+  const events = await listEvents(org.id, { ...filters, limit: PAGE, offset: (page - 1) * PAGE });
   const pages = Math.max(1, Math.ceil(total / PAGE));
   const link = (p: number) => {
     const q = new URLSearchParams(Object.entries(sp).filter(([, v]) => v) as [string, string][]);

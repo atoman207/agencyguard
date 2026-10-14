@@ -37,7 +37,7 @@ function RuleLine({ rule }: { rule: AppliedRule }) {
 }
 
 /** The event in the standard format from the roadmap (section 3.2). */
-function standardEvent(e: ActionEvent) {
+async function standardEvent(e: ActionEvent) {
   return {
     event_id: e.id,
     agent_id: e.agent_id,
@@ -58,12 +58,12 @@ function standardEvent(e: ActionEvent) {
 export default async function EventPage({ params }: { params: Promise<{ id: string }> }) {
   const { org } = await requireSession();
   const { id } = await params;
-  const e = getEvent(org.id, id);
+  const e = await getEvent(org.id, id);
   if (!e) notFound();
-  const agent = getAgent(org.id, e.agent_id);
+  const agent = await getAgent(org.id, e.agent_id);
   const tz = org.settings.timezone;
   const type = getAction(e.action);
-  const timeline = e.run_id ? runTimeline(org.id, e.run_id) : [];
+  const timeline = e.run_id ? await runTimeline(org.id, e.run_id) : [];
   const observed = !!e.observe && e.would_decision !== "ALLOW";
   const mismatch = !!(e.result as { parameter_mismatch?: boolean } | null)?.parameter_mismatch;
 

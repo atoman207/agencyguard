@@ -18,8 +18,8 @@ import type { ActionEvent, ApprovalDecision, Org, User } from "@/lib/types";
  * action executed is exactly the action that was approved.
  */
 export async function executeEvent(org: Org, eventId: string, now: number, live = true): Promise<ActionEvent> {
-  const claimed = run("UPDATE events SET status = 'executing' WHERE org_id = ? AND id = ? AND status IN ('allowed', 'approved') AND source = 'vault'", org.id, eventId);
-  const event = getEvent(org.id, eventId);
+  const claimed = await run("UPDATE events SET status = 'executing' WHERE org_id = ? AND id = ? AND status IN ('allowed', 'approved') AND source = 'vault'", org.id, eventId);
+  const event = await getEvent(org.id, eventId);
   if (!event) throw new Error("Event not found.");
   if (!claimed) return event;
 
@@ -27,18 +27,18 @@ export async function executeEvent(org: Org, eventId: string, now: number, live 
   const type = getAction(event.action);
   try {
     // The kill switch revokes vault access, even for something approved a moment ago.
-    const agent = getAgent(org.id, event.agent_id);
+    const agent = await getAgent(org.id, event.agent_id);
     if (!agent || agent.status !== "active") throw new Error("The agent was stopped before the action could run.");
     const result = await execute(org, connector, actionId, event.params, event.id, now);
-    updateEvent(event.id, { status: "executed", result, money_state: event.amount !== null && type.money ? "settled" : event.money_state, completed_at: now });
-    audit(org.id, SYSTEM, "vault.executed", { type: "event", id: event.id }, { tool: event.tool, resource: event.resource ?? undefined, amount: event.amount ?? undefined, fingerprint: event.params_fingerprint }, now);
+    await updateEvent(event.id, { status: "executed", result, money_state: event.amount !== null && type.money ? "settled" : event.money_state, completed_at: now });
+    await audit(org.id, SYSTEM, "vault.executed", { type: "event", id: event.id }, { tool: event.tool, resource: event.resource ?? undefined, amount: event.amount ?? undefined, fingerprint: event.params_fingerprint }, now);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    updateEvent(event.id, { status: "failed", result: { error: message }, money_state: event.money_state === "reserved" ? "released" : event.money_state, completed_at: now });
-    audit(org.id, SYSTEM, "vault.failed", { type: "event", id: event.id }, { tool: event.tool, error: message }, now);
-    createAlert(org, { kind: "vault.failed", severity: "warning", title: `${event.tool} failed in the vault`, body: message, agentId: event.agent_id, eventId: event.id }, now, live);
+    await updateEvent(event.id, { status: "failed", result: { error: message }, money_state: event.money_state === "reserved" ? "released" : event.money_state, completed_at: now });
+    await audit(org.id, SYSTEM, "vault.failed", { type: "event", id: event.id }, { tool: event.tool, error: message }, now);
+    await createAlert(org, { kind: "vault.failed", severity: "warning", title: `${event.tool} failed in the vault`, body: message, agentId: event.agent_id, eventId: event.id }, now, live);
   }
-  return getEvent(org.id, eventId)!;
+  return (await getEvent(org.id, eventId))!;
 }
 
 /** Records a human decision and, for vault actions, executes the approved action straight away. */
@@ -52,7 +52,7 @@ export async function decideAndExecute(
   now: number,
   live = true,
 ): Promise<DecideResult> {
-  const result = decideApproval(org, user, approvalId, decision, note, channel, now, live);
+  const result = await decideApproval(org, user, approvalId, decision, note, channel, now, live);
   if (result.execute) result.event = await executeEvent(org, result.event.id, now, live);
   return result;
 }

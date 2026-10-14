@@ -6,7 +6,7 @@ import type { RuleEffect } from "@/lib/types";
 // GET/POST /v1/rules — list rules, create one, or install a template pack.
 export const GET = route(async (request) => {
   const auth = await managementAuth(request, "viewer");
-  return Response.json({ rules: listRules(auth.org.id) });
+  return Response.json({ rules: await listRules(auth.org.id) });
 });
 
 export const POST = route(async (request) => {
@@ -15,9 +15,9 @@ export const POST = route(async (request) => {
   const agentId = typeof body.agent_id === "string" ? body.agent_id : null;
   if (typeof body.template === "string") {
     await installTemplate(auth.org, auth.actor, body.template, { agentId, enable: body.enabled !== false }, Date.now());
-    return Response.json({ rules: listRules(auth.org.id).filter((r) => r.template === body.template) }, { status: 201 });
+    return Response.json({ rules: (await listRules(auth.org.id)).filter((r) => r.template === body.template) }, { status: 201 });
   }
-  const id = createRule(
+  const id = await createRule(
     auth.org,
     auth.actor,
     {
@@ -30,5 +30,5 @@ export const POST = route(async (request) => {
     },
     Date.now(),
   );
-  return Response.json({ rule: getRule(auth.org.id, id) }, { status: 201 });
+  return Response.json({ rule: await getRule(auth.org.id, id) }, { status: 201 });
 });

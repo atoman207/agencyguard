@@ -13,7 +13,7 @@ import { atLeast } from "@/server/users";
 
 export const metadata: Metadata = { title: "Tools" };
 
-function ActionSelect({ id, value }: { id: string; value: string }) {
+async function ActionSelect({ id, value }: { id: string; value: string }) {
   return (
     <select id={id} name="action" className="field h-9 py-0 text-sm" defaultValue={value}>
       {ACTION_CATEGORIES.map((category) => (
@@ -29,10 +29,10 @@ function ActionSelect({ id, value }: { id: string; value: string }) {
 
 export default async function ToolsPage() {
   const { org, user, now } = await requireSession();
-  const tools = listTools(org.id);
-  const agentName = new Map(listAgents(org.id).map((a) => [a.id, a.name]));
+  const tools = await listTools(org.id);
+  const agentName = new Map((await listAgents(org.id)).map((a) => [a.id, a.name]));
   const usedBy = new Map<string, string[]>();
-  for (const link of listAgentTools(org.id)) usedBy.set(link.tool_id, [...(usedBy.get(link.tool_id) ?? []), agentName.get(link.agent_id) ?? "Unknown"]);
+  for (const link of await listAgentTools(org.id)) usedBy.set(link.tool_id, [...(usedBy.get(link.tool_id) ?? []), agentName.get(link.agent_id) ?? "Unknown"]);
   const unclassified = tools.filter((t) => t.status !== "confirmed");
   const classified = tools.filter((t) => t.status === "confirmed");
   const canEdit = atLeast(user.role, "admin");

@@ -13,7 +13,7 @@ export default async function NewRulePage() {
   return (
     <>
       <PageHeader eyebrow={<Link href="/rules" className="hover:underline">Rules</Link>} title="New rule" lead="Build it from conditions, read it back in plain words, then test it on real activity before it applies to anything." />
-      <RuleBuilder agents={listAgents(org.id).map((a) => ({ id: a.id, name: a.name }))} timeZone={org.settings.timezone} canEdit={atLeast(user.role, "admin")} />
+      <RuleBuilder agents={(await listAgents(org.id)).map((a) => ({ id: a.id, name: a.name }))} timeZone={org.settings.timezone} canEdit={atLeast(user.role, "admin")} />
     </>
   );
 }

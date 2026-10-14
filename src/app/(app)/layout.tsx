@@ -14,7 +14,7 @@ import { readShellSession } from "@/server/auth";
 async function PendingBadge() {
   const session = await readShellSession();
   if (!session) return null;
-  const n = countPending(session.org.id);
+  const n = await countPending(session.org.id);
   if (!n) return null;
   return (
     <span className="pulse-dot rounded-full bg-marigold-500 px-1.5 text-xs font-bold leading-5 text-himal-950" aria-label={`${n} waiting`}>

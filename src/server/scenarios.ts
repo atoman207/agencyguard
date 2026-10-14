@@ -53,10 +53,10 @@ export const SCENARIOS: Scenario[] = [
 
 const PLAYGROUND = "Playground agent";
 
-function playgroundAgent(org: Org, user: User, now: number, steps: ScenarioStep[]): Agent {
-  let agent = listAgents(org.id).find((a) => a.name === PLAYGROUND);
+async function playgroundAgent(org: Org, user: User, now: number, steps: ScenarioStep[]): Promise<Agent> {
+  let agent = (await listAgents(org.id)).find((a) => a.name === PLAYGROUND);
   if (!agent) {
-    agent = createAgent(
+    agent = await createAgent(
       org,
       userActor(user),
       { name: PLAYGROUND, platform: "Custom code", purpose: "Runs the playground scenarios against sandbox connectors.", environment: "production", mode: "enforce", ownerUserId: user.id, handlesPrivateData: true, checkResponses: true },
@@ -65,13 +65,13 @@ function playgroundAgent(org: Org, user: User, now: number, steps: ScenarioStep[
   }
   if (agent.status !== "active") {
     const was = agent.status;
-    agent = setAgentStatus(org, userActor(user), agent.id, "active", "Reactivated to run a playground scenario.", now, false);
+    agent = await setAgentStatus(org, userActor(user), agent.id, "active", "Reactivated to run a playground scenario.", now, false);
     steps.push({ label: "Playground agent reactivated", outcome: "info", detail: `An earlier scenario left it ${was === "killed" ? "stopped" : "paused"}.` });
   }
-  if (agent.mode !== "enforce") run("UPDATE agents SET mode = 'enforce' WHERE id = ?", agent.id);
+  if (agent.mode !== "enforce") await run("UPDATE agents SET mode = 'enforce' WHERE id = ?", agent.id);
   // Sandbox money from earlier runs should not count against today's limits.
-  const released = run("UPDATE events SET money_state = 'released' WHERE agent_id = ? AND money_state IN ('reserved', 'settled')", agent.id);
-  if (released) audit(org.id, SYSTEM, "playground.reset", { type: "agent", id: agent.id }, { sandbox_amounts_released: released }, now);
+  const released = await run("UPDATE events SET money_state = 'released' WHERE agent_id = ? AND money_state IN ('reserved', 'settled')", agent.id);
+  if (released) await audit(org.id, SYSTEM, "playground.reset", { type: "agent", id: agent.id }, { sandbox_amounts_released: released }, now);
   return { ...agent, mode: "enforce" };
 }
 
@@ -93,18 +93,18 @@ export async function runScenario(org: Org, user: User, id: string, now: number)
   if (scenario.needs && !(await installedTemplates(org.id)).has(scenario.needs)) {
     steps.push({ label: "Template not installed", outcome: "info", detail: `This scenario is written for the "${scenario.needs}" template. Without it you will see AgentGuard's default behaviour instead. Install it under Rules.` });
   }
-  const agent = playgroundAgent(org, user, now, steps);
+  const agent = await playgroundAgent(org, user, now, steps);
   const token = fakeToken(agent);
   const runId = `play_${newId("r").slice(2)}`;
   let tick = 0;
   const at = () => now + tick++ * 50;
 
-  if (!getCredential(org.id, "stripe")) saveCredential(org, userActor(user), { connector: "stripe", mode: "sandbox", apiKey: "" }, now);
-  const stripeSandbox = getCredential(org.id, "stripe")!.mode === "sandbox";
+  if (!await getCredential(org.id, "stripe")) await saveCredential(org, userActor(user), { connector: "stripe", mode: "sandbox", apiKey: "" }, now);
+  const stripeSandbox = (await getCredential(org.id, "stripe"))!.mode === "sandbox";
 
-  const newCharge = (amount: number, customer: string, description: string) => {
+  const newCharge = async (amount: number, customer: string, description: string) => {
     const chargeId = newId("ch");
-    run(
+    await run(
       "INSERT INTO sandbox_charges (id, org_id, customer, customer_name, customer_email, amount, currency, description, created_at) VALUES (?, ?, ?, ?, ?, ?, 'usd', ?, ?)",
       chargeId, org.id, customer, "Playground Customer", "customer@example.com", amount, description, now - 86_400_000,
     );
@@ -113,7 +113,7 @@ export async function runScenario(org: Org, user: User, id: string, now: number)
   const vaultRefund = async (label: string, charge: string, amount: number) => {
     const def = getConnector("stripe")!.actions.find((a) => a.id === "refund")!;
     const prepared = await prepare(org, "stripe", def, { charge, amount, reason: "requested_by_customer" });
-    const outcome = decide(
+    const outcome = await decide(
       { org, agent, token, source: "vault", now: at() },
       { tool: "stripe.refund", knownAction: def.action, resource: prepared.resource, params: prepared.params, sourceFacts: prepared.facts, runId, explanation: "The customer says the item arrived damaged." },
     );
@@ -121,8 +121,8 @@ export async function runScenario(org: Org, user: User, id: string, now: number)
     steps.push({ label, ...describe(outcome) });
     return outcome;
   };
-  const check = (label: string, req: ActionRequest) => {
-    const outcome = decide({ org, agent, token, source: "sdk", now: at() }, { runId, ...req });
+  const check = async (label: string, req: ActionRequest) => {
+    const outcome = await decide({ org, agent, token, source: "sdk", now: at() }, { runId, ...req });
     steps.push({ label, ...describe(outcome) });
     return outcome;
   };
@@ -134,40 +134,40 @@ export async function runScenario(org: Org, user: User, id: string, now: number)
 
   switch (id) {
     case "refund-450": {
-      const charge = newCharge(450, customer, "Order #7001 — Pashmina shawl, Dhaka topi");
+      const charge = await newCharge(450, customer, "Order #7001 — Pashmina shawl, Dhaka topi");
       const o = await vaultRefund("Agent asks the vault to refund $450", charge, 450);
       if (o.outcome === "pending") steps.push({ label: "Now it is your turn", outcome: "info", detail: "Open the approval. You will see the facts from Stripe first, then the agent's explanation. Approve it and the vault runs the refund exactly once.", approvalId: o.event.approval_id ?? undefined });
       break;
     }
     case "refund-small": {
-      await vaultRefund("Agent asks the vault to refund $40", newCharge(120, customer, "Order #7002 — Felt slippers"), 40);
+      await vaultRefund("Agent asks the vault to refund $40", await newCharge(120, customer, "Order #7002 — Felt slippers"), 40);
       break;
     }
     case "retry": {
-      const charge = newCharge(200, customer, "Order #7003 — Singing bowl");
+      const charge = await newCharge(200, customer, "Order #7003 — Singing bowl");
       await vaultRefund("First attempt: refund $60", charge, 60);
       await vaultRefund("Timeout. The agent retries the same refund", charge, 60);
       await vaultRefund("And once more", charge, 60);
-      const refunded = get<{ refunded: number }>("SELECT refunded FROM sandbox_charges WHERE org_id = ? AND id = ?", org.id, charge)!.refunded;
+      const refunded = (await get<{ refunded: number }>("SELECT refunded FROM sandbox_charges WHERE org_id = ? AND id = ?", org.id, charge))!.refunded;
       steps.push({ label: "What Stripe saw", outcome: "info", detail: `${money(refunded)} refunded on the charge in total. One refund, not three.` });
       break;
     }
     case "split": {
-      for (let i = 1; i <= 5; i++) await vaultRefund(`Refund ${i} of 5: $49 to the same customer`, newCharge(80, customer, `Order #71${i}0`), 49);
+      for (let i = 1; i <= 5; i++) await vaultRefund(`Refund ${i} of 5: $49 to the same customer`, await newCharge(80, customer, `Order #71${i}0`), 49);
       steps.push({ label: "Why", outcome: "info", detail: "Each refund is under the $100 per-action rule. The cumulative limit per customer per week is what catches the pattern." });
       break;
     }
     case "tamper": {
       const req: ActionRequest = { action: "payment.refund", resource: `order:${newId("o").slice(2)}`, params: { amount: 150, currency: "usd", customer } , explanation: "Refund for a damaged order." };
-      const first = check("Agent asks to refund $150", req);
+      const first = await check("Agent asks to refund $150", req);
       if (first.outcome === "pending" && first.event.approval_id) {
-        decideApproval(org, user, first.event.approval_id, "approve", "Approved in the playground.", "dashboard", at());
+        await decideApproval(org, user, first.event.approval_id, "approve", "Approved in the playground.", "dashboard", at());
         steps.push({ label: `${user.name} approves the $150 refund`, outcome: "info", detail: "The approval is locked to the fingerprint of these exact parameters." });
       }
-      check("Agent now asks for $900 on the same order", { ...req, params: { ...req.params, amount: 900 } });
-      const use = check("Agent asks again for the original $150", req);
+      await check("Agent now asks for $900 on the same order", { ...req, params: { ...req.params, amount: 900 } });
+      const use = await check("Agent asks again for the original $150", req);
       if (use.outcome === "allow") {
-        const reported = reportCompletion({ org, agent, now: at() }, { eventId: use.event.id, status: "completed", params: { ...req.params, amount: 900 } });
+        const reported = await reportCompletion({ org, agent, now: at() }, { eventId: use.event.id, status: "completed", params: { ...req.params, amount: 900 } });
         const mismatch = !!(reported.result as { parameter_mismatch?: boolean } | null)?.parameter_mismatch;
         steps.push({
           label: "Agent reports it actually executed $900",
@@ -179,7 +179,7 @@ export async function runScenario(org: Org, user: User, id: string, now: number)
       break;
     }
     case "unknown-tool": {
-      const o = check("Agent calls wire_transfer_v2", { tool: "wire_transfer_v2", params: { iban: "NP12 0000 0000 0000", amount: 3200, currency: "usd" }, explanation: "Paying a supplier." });
+      const o = await check("Agent calls wire_transfer_v2", { tool: "wire_transfer_v2", params: { iban: "NP12 0000 0000 0000", amount: 3200, currency: "usd" }, explanation: "Paying a supplier." });
       if (o.outcome === "pending") steps.push({ label: "Next", outcome: "info", detail: "Classify the tool under Tools. Until a person confirms what it does, every call asks a human." });
       break;
     }
@@ -219,10 +219,10 @@ export async function runScenario(org: Org, user: User, id: string, now: number)
       break;
     }
     case "injection": {
-      if (!listMcpServers(org.id).some((s) => s.slug === "shop")) saveMcpServer(org, userActor(user), { slug: "shop", name: "Shop tools (demo MCP server)", url: BUILTIN_DEMO }, now);
+      if (!(await listMcpServers(org.id)).some((s) => s.slug === "shop")) await saveMcpServer(org, userActor(user), { slug: "shop", name: "Shop tools (demo MCP server)", url: BUILTIN_DEMO }, now);
       for (const [name, action] of [["shop.fetch_webpage", "web.fetch"], ["shop.send_message", "message.send"]]) {
-        const tool = upsertTool(org.id, name, now);
-        if (tool.status !== "confirmed") classifyTool(org, userActor(user), tool.id, action, now);
+        const tool = await upsertTool(org.id, name, now);
+        if (tool.status !== "confirmed") await classifyTool(org, userActor(user), tool.id, action, now);
       }
       let rpc = 0;
       const call = async (label: string, name: string, args: Record<string, unknown>) => {
@@ -230,7 +230,7 @@ export async function runScenario(org: Org, user: User, id: string, now: number)
         const result = r.message?.result as { content?: { text?: string }[]; isError?: boolean } | undefined;
         const text = result?.content?.[0]?.text ?? r.message?.error?.message ?? "";
         // The record of this call carries the reason; `text` is what the agent itself was told.
-        const event = listEvents(org.id, { runId, limit: 1 })[0];
+        const event = (await listEvents(org.id, { runId, limit: 1 }))[0];
         const outcome = /^Waiting for human approval/.test(text) ? "pending" : /^Blocked/.test(text) ? "block" : "allow";
         const shown = outcome === "allow" ? text : (event?.reason ?? text);
         steps.push({ label, outcome, detail: shown.length > 280 ? `${shown.slice(0, 280)}…` : shown, eventId: event?.id, approvalId: event?.approval_id ?? undefined });
@@ -242,11 +242,11 @@ export async function runScenario(org: Org, user: User, id: string, now: number)
       break;
     }
     case "kill": {
-      const waiting = check("Agent asks for a $900 refund and waits", { action: "payment.refund", resource: `order:${newId("o").slice(2)}`, params: { amount: 900, currency: "usd", customer } });
-      setAgentStatus(org, userActor(user), agent.id, "killed", "Playground: kill switch scenario.", at());
+      const waiting = await check("Agent asks for a $900 refund and waits", { action: "payment.refund", resource: `order:${newId("o").slice(2)}`, params: { amount: 900, currency: "usd", customer } });
+      await setAgentStatus(org, userActor(user), agent.id, "killed", "Playground: kill switch scenario.", at());
       steps.push({ label: `${user.name} hits the kill switch`, outcome: "info", detail: "Every token is revoked, which removes vault access, and anything waiting for approval is rejected." });
       const stopped: Agent = { ...agent, status: "killed" };
-      const after = decide({ org, agent: stopped, token, source: "sdk", now: at() }, { action: "order.read", params: { order_id: "5521" }, runId });
+      const after = await decide({ org, agent: stopped, token, source: "sdk", now: at() }, { action: "order.read", params: { order_id: "5521" }, runId });
       steps.push({ label: "Agent tries a harmless read", ...describe(after) });
       const model = await chatCompletion({ org, agent: stopped, token }, { model: "sandbox-small", messages: [{ role: "user", content: "hello" }] }, runId, at());
       steps.push({ label: "Agent calls the model", outcome: model.status === 200 ? "allow" : "block", detail: (model.body.error as { message?: string } | undefined)?.message ?? "Forwarded.", eventId: model.eventId ?? undefined });

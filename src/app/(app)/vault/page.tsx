@@ -17,10 +17,10 @@ export const metadata: Metadata = { title: "Vault & gateways" };
 export default async function VaultPage() {
   const { org, user } = await requireSession();
   const origin = await requestOrigin();
-  const creds = new Map(listCredentials(org.id).map((c) => [c.connector, c]));
-  const servers = listMcpServers(org.id);
+  const creds = new Map((await listCredentials(org.id)).map((c) => [c.connector, c]));
+  const servers = await listMcpServers(org.id);
   const canEdit = atLeast(user.role, "admin");
-  const charges = creds.get("stripe")?.mode === "sandbox" ? listSandboxCharges(org.id).slice(0, 8) : [];
+  const charges = creds.get("stripe")?.mode === "sandbox" ? (await listSandboxCharges(org.id)).slice(0, 8) : [];
   const tz = org.settings.timezone;
 
   return (

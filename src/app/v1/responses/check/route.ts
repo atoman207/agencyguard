@@ -6,12 +6,12 @@ import type { Source } from "@/lib/types";
 // POST /v1/responses/check — the response checkpoint for agents that do not
 // call their model through the gateway. Send the reply before the customer sees it.
 export const POST = route(async (request) => {
-  const auth = agentAuth(request);
+  const auth = await agentAuth(request);
   const body = await readJson(request);
   if (typeof body.text !== "string" || !body.text.trim()) throw new RequestError("Send the reply as `text`.");
   if (auth.agent.status !== "active") throw new RequestError(`This agent is ${auth.agent.status}.`, 403, `agent_${auth.agent.status}`);
   const source = (["sdk", "n8n", "make", "api"] as Source[]).includes(body.source as Source) ? (body.source as Source) : "api";
-  const verdict = checkResponse(
+  const verdict = await checkResponse(
     { org: auth.org, agent: auth.agent, source, runId: typeof body.run_id === "string" ? body.run_id : null, now: Date.now() },
     body.text,
   );

@@ -21,7 +21,7 @@ export default async function NewAgentPage() {
     <>
       <PageHeader title="Register an agent" lead="Give the agent an identity and an owner. You get its token on the next screen." />
       <Card className="max-w-3xl p-6">
-        <AgentForm action={createAgentAction} users={listUsers(org.id)} defaultMode={org.settings.defaultAgentMode} submit="Register agent" />
+        <AgentForm action={createAgentAction} users={await listUsers(org.id)} defaultMode={org.settings.defaultAgentMode} submit="Register agent" />
       </Card>
     </>
   );

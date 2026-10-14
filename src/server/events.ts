@@ -22,17 +22,17 @@ const COLUMNS = [
   "created_at", "completed_at",
 ] as const;
 
-export function insertEvent(e: ActionEvent): void {
+export async function insertEvent(e: ActionEvent): Promise<void> {
   const row: Record<string, SQLInputValue> = {
     ...e,
     params: JSON.stringify(e.params),
     rules: JSON.stringify(e.rules),
     result: e.result === null || e.result === undefined ? null : JSON.stringify(e.result),
   } as unknown as Record<string, SQLInputValue>;
-  run(`INSERT INTO events (${COLUMNS.join(", ")}) VALUES (${COLUMNS.map(() => "?").join(", ")})`, ...COLUMNS.map((c) => row[c] ?? null));
+  await run(`INSERT INTO events (${COLUMNS.join(", ")}) VALUES (${COLUMNS.map(() => "?").join(", ")})`, ...COLUMNS.map((c) => row[c] ?? null));
 }
 
-export function updateEvent(id: string, patch: Partial<ActionEvent>): void {
+export async function updateEvent(id: string, patch: Partial<ActionEvent>): Promise<void> {
   const keys = Object.keys(patch) as (keyof ActionEvent)[];
   if (keys.length === 0) return;
   const values = keys.map((k) => {
@@ -40,11 +40,11 @@ export function updateEvent(id: string, patch: Partial<ActionEvent>): void {
     if (k === "params" || k === "rules" || k === "result") return v === null || v === undefined ? null : JSON.stringify(v);
     return (v ?? null) as SQLInputValue;
   });
-  run(`UPDATE events SET ${keys.map((k) => `${k} = ?`).join(", ")} WHERE id = ?`, ...values, id);
+  await run(`UPDATE events SET ${keys.map((k) => `${k} = ?`).join(", ")} WHERE id = ?`, ...values, id);
 }
 
-export function getEvent(orgId: string, id: string): ActionEvent | undefined {
-  const row = get<EventRow>("SELECT * FROM events WHERE org_id = ? AND id = ?", orgId, id);
+export async function getEvent(orgId: string, id: string): Promise<ActionEvent | undefined> {
+  const row = await get<EventRow>("SELECT * FROM events WHERE org_id = ? AND id = ?", orgId, id);
   return row ? parseEvent(row) : undefined;
 }
 
@@ -100,12 +100,12 @@ function buildWhere(orgId: string, f: EventFilters): { where: string; params: SQ
   return { where: where.join(" AND "), params };
 }
 
-export function listEvents(orgId: string, f: EventFilters = {}): ActionEvent[] {
+export async function listEvents(orgId: string, f: EventFilters = {}): Promise<ActionEvent[]> {
   const { where, params } = buildWhere(orgId, f);
-  return all<EventRow>(`SELECT * FROM events WHERE ${where} ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?`, ...params, f.limit ?? 50, f.offset ?? 0).map(parseEvent);
+  return (await all<EventRow>(`SELECT * FROM events WHERE ${where} ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?`, ...params, f.limit ?? 50, f.offset ?? 0)).map(parseEvent);
 }
 
-export function countEvents(orgId: string, f: EventFilters = {}): number {
+export async function countEvents(orgId: string, f: EventFilters = {}): Promise<number> {
   const { where, params } = buildWhere(orgId, f);
-  return get<{ n: number }>(`SELECT COUNT(*) AS n FROM events WHERE ${where}`, ...params)!.n;
+  return (await get<{ n: number }>(`SELECT COUNT(*) AS n FROM events WHERE ${where}`, ...params))!.n;
 }

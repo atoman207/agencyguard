@@ -8,10 +8,10 @@ export const POST = route(async (request) => {
   const body = await readJson(request);
   const now = Date.now();
   if (typeof body.mcp_url === "string") {
-    saveMcpServer(auth.org, auth.actor, { slug: String(body.slug ?? ""), name: String(body.name ?? ""), url: body.mcp_url, authHeader: typeof body.auth_header === "string" ? body.auth_header : undefined }, now);
+    await saveMcpServer(auth.org, auth.actor, { slug: String(body.slug ?? ""), name: String(body.name ?? ""), url: body.mcp_url, authHeader: typeof body.auth_header === "string" ? body.auth_header : undefined }, now);
     return Response.json({ ok: true }, { status: 201 });
   }
-  saveCredential(
+  await saveCredential(
     auth.org,
     auth.actor,
     {

@@ -24,21 +24,21 @@ export default async function AgentPage({ params, searchParams }: { params: Prom
   const { org, user, now } = await requireSession();
   const { id } = await params;
   const isNew = (await searchParams).new === "1";
-  const agent = getAgent(org.id, id);
+  const agent = await getAgent(org.id, id);
   if (!agent) notFound();
 
   const tz = org.settings.timezone;
   const canEdit = atLeast(user.role, "admin");
-  const users = listUsers(org.id);
+  const users = await listUsers(org.id);
   const owner = users.find((u) => u.id === agent.owner_user_id);
-  const stats = agentStats(org, now).find((s) => s.agent.id === id)!;
-  const cov = coverage(org).agents.find((a) => a.agent.id === id)!;
-  const tokens = listTokens(org.id, id);
+  const stats = (await agentStats(org, now)).find((s) => s.agent.id === id)!;
+  const cov = (await coverage(org)).agents.find((a) => a.agent.id === id)!;
+  const tokens = await listTokens(org.id, id);
   const liveTokens = tokens.filter((t) => !t.revoked_at && (!t.expires_at || t.expires_at > now));
-  const events = listEvents(org.id, { agentId: id, hideModelCalls: true, limit: 10 });
+  const events = await listEvents(org.id, { agentId: id, hideModelCalls: true, limit: 10 });
   const agents = new Map([[agent.id, agent]]);
   // What it did before it was stopped: the last actions up to the moment of the kill.
-  const beforeStop = agent.status !== "active" && agent.status_changed_at ? listEvents(org.id, { agentId: id, hideModelCalls: true, until: agent.status_changed_at + 1, limit: 8 }) : [];
+  const beforeStop = agent.status !== "active" && agent.status_changed_at ? await listEvents(org.id, { agentId: id, hideModelCalls: true, until: agent.status_changed_at + 1, limit: 8 }) : [];
 
   return (
     <>

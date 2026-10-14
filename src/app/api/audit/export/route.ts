@@ -12,10 +12,10 @@ const csvCell = (value: unknown) => {
 export const GET = route(async (request) => {
   const auth = await sessionAuth("admin");
   const format = new URL(request.url).searchParams.get("format") === "json" ? "json" : "csv";
-  const entries = allAudit(auth.org.id);
-  const integrity = verifyAudit(auth.org.id);
+  const entries = await allAudit(auth.org.id);
+  const integrity = await verifyAudit(auth.org.id);
   const now = Date.now();
-  audit(auth.org.id, auth.actor, "audit.exported", { type: "audit_log", id: null }, { format, entries: entries.length }, now);
+  await audit(auth.org.id, auth.actor, "audit.exported", { type: "audit_log", id: null }, { format, entries: entries.length }, now);
   const stamp = new Date(now).toISOString().slice(0, 10);
 
   if (format === "json") {

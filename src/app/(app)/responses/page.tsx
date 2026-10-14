@@ -33,8 +33,8 @@ export default async function ResponsesPage() {
   const { org, user } = await requireSession();
   const cfg = org.settings.responseCheck;
   const owner = atLeast(user.role, "owner");
-  const flagged = listEvents(org.id, { action: "response.send", limit: 15 });
-  const agents = new Map(listAgents(org.id).map((a) => [a.id, a.name]));
+  const flagged = await listEvents(org.id, { action: "response.send", limit: 15 });
+  const agents = new Map((await listAgents(org.id)).map((a) => [a.id, a.name]));
 
   return (
     <>

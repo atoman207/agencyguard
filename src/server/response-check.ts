@@ -132,10 +132,10 @@ export interface ResponseVerdict {
  * Checks a reply before it is sent and records the outcome. A flagged reply can
  * be blocked, replaced with a company-approved answer, or held for review.
  */
-export function checkResponse(
+export async function checkResponse(
   ctx: { org: Org; agent: Agent; source: Source; runId?: string | null; now: number; live?: boolean },
   text: string,
-): ResponseVerdict {
+): Promise<ResponseVerdict> {
   const { org, agent, now } = ctx;
   const cfg = org.settings.responseCheck;
   const { findings, masked } = scanResponse(org, text);
@@ -173,9 +173,9 @@ export function checkResponse(
     detail: `${f.label}: "${f.snippet}"`,
   }));
 
-  return tx(() => {
-    const tool = upsertTool(org.id, "response.send", now);
-    sightTool(org.id, agent.id, tool.id, connectionFor(ctx.source), now);
+  return await tx(async () => {
+    const tool = await upsertTool(org.id, "response.send", now);
+    await sightTool(org.id, agent.id, tool.id, connectionFor(ctx.source), now);
     const params = { text: masked, findings: active, replaced_with: replacedTopic ?? undefined };
     const event: ActionEvent = {
       id: newId("evt"), org_id: org.id, agent_id: agent.id, run_id: ctx.runId ?? null, source: ctx.source,
@@ -188,12 +188,12 @@ export function checkResponse(
       amount: null, currency: null, customer: null, money_state: "none", cost_usd: 0, model: null, tokens_in: 0, tokens_out: 0,
       explanation: null, result: null, approval_id: null, duplicate_of: null, created_at: now, completed_at: decision === "ASK_HUMAN" ? null : now,
     };
-    insertEvent(event);
-    audit(org.id, agentActor(agent), `response.${observe ? "observed" : action === "hold" ? "held" : action === "block" ? "blocked" : action === "replace" ? "replaced" : "flagged"}`, { type: "event", id: event.id }, { findings: summary }, now);
+    await insertEvent(event);
+    await audit(org.id, agentActor(agent), `response.${observe ? "observed" : action === "hold" ? "held" : action === "block" ? "blocked" : action === "replace" ? "replaced" : "flagged"}`, { type: "event", id: event.id }, { findings: summary }, now);
 
     let approvalId: string | null = null;
     if (decision === "ASK_HUMAN") {
-      const approval = createApproval(
+      const approval = await createApproval(
         org,
         agent,
         event,
@@ -207,7 +207,7 @@ export function checkResponse(
         ctx.live !== false,
       );
       approvalId = approval.id;
-      updateEvent(event.id, { approval_id: approval.id });
+      await updateEvent(event.id, { approval_id: approval.id });
     }
     // In observe mode the reply goes out unchanged; the log shows what would have happened.
     return { action, text: observe ? text : outText, findings: active, eventId: event.id, approvalId, observe };

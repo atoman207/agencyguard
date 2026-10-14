@@ -6,7 +6,7 @@ import type { AgentMode, Environment } from "@/lib/types";
 // GET/POST /v1/agents — list and register agents.
 export const GET = route(async (request) => {
   const auth = await managementAuth(request, "viewer");
-  return Response.json({ agents: listAgents(auth.org.id) });
+  return Response.json({ agents: await listAgents(auth.org.id) });
 });
 
 export const POST = route(async (request) => {
@@ -16,7 +16,7 @@ export const POST = route(async (request) => {
   if (!name) throw new RequestError("An agent needs a `name`.");
   const environment = (["production", "staging", "development"] as Environment[]).includes(body.environment as Environment) ? (body.environment as Environment) : "production";
   const mode = (["observe", "enforce"] as AgentMode[]).includes(body.mode as AgentMode) ? (body.mode as AgentMode) : auth.org.settings.defaultAgentMode;
-  const agent = createAgent(
+  const agent = await createAgent(
     auth.org,
     auth.actor,
     {

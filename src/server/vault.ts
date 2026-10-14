@@ -123,51 +123,51 @@ interface StoredSecret {
   baseUrl?: string;
 }
 
-export function listCredentials(orgId: string): Credential[] {
-  return all<Credential>("SELECT id, org_id, connector, label, mode, hint, keys_rotated, created_at FROM credentials WHERE org_id = ? ORDER BY created_at ASC", orgId);
+export async function listCredentials(orgId: string): Promise<Credential[]> {
+  return await all<Credential>("SELECT id, org_id, connector, label, mode, hint, keys_rotated, created_at FROM credentials WHERE org_id = ? ORDER BY created_at ASC", orgId);
 }
 
-export function getCredential(orgId: string, connector: string): Credential | undefined {
-  return get<Credential>("SELECT id, org_id, connector, label, mode, hint, keys_rotated, created_at FROM credentials WHERE org_id = ? AND connector = ?", orgId, connector);
+export async function getCredential(orgId: string, connector: string): Promise<Credential | undefined> {
+  return await get<Credential>("SELECT id, org_id, connector, label, mode, hint, keys_rotated, created_at FROM credentials WHERE org_id = ? AND connector = ?", orgId, connector);
 }
 
-export function saveCredential(
+export async function saveCredential(
   org: Org,
   actor: Actor,
   input: { connector: string; mode: "sandbox" | "live"; apiKey: string; baseUrl?: string },
   now: number,
-): void {
+): Promise<void> {
   const def = getConnector(input.connector);
   if (!def) throw new Error("Unknown connector.");
   const apiKey = input.apiKey.trim();
   if (input.mode === "live" && !apiKey) throw new Error("Live mode needs the real key.");
   const secret: StoredSecret = { apiKey, baseUrl: input.baseUrl?.trim() || undefined };
   const hint = apiKey ? `…${apiKey.slice(-4)}` : "sandbox";
-  tx(() => {
-    run("DELETE FROM credentials WHERE org_id = ? AND connector = ?", org.id, def.id);
-    run(
+  await tx(async () => {
+    await run("DELETE FROM credentials WHERE org_id = ? AND connector = ?", org.id, def.id);
+    await run(
       "INSERT INTO credentials (id, org_id, connector, label, mode, secret, hint, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
       newId("cred"), org.id, def.id, def.label, input.mode, encryptSecret(JSON.stringify(secret)), hint, now,
     );
     // The key itself is never written to the audit log.
-    audit(org.id, actor, "vault.credential_saved", { type: "credential", id: def.id }, { connector: def.id, mode: input.mode }, now);
+    await audit(org.id, actor, "vault.credential_saved", { type: "credential", id: def.id }, { connector: def.id, mode: input.mode }, now);
   });
 }
 
-export function deleteCredential(org: Org, actor: Actor, connector: string, now: number): void {
-  if (run("DELETE FROM credentials WHERE org_id = ? AND connector = ?", org.id, connector)) {
-    audit(org.id, actor, "vault.credential_removed", { type: "credential", id: connector }, { connector }, now);
+export async function deleteCredential(org: Org, actor: Actor, connector: string, now: number): Promise<void> {
+  if (await run("DELETE FROM credentials WHERE org_id = ? AND connector = ?", org.id, connector)) {
+    await audit(org.id, actor, "vault.credential_removed", { type: "credential", id: connector }, { connector }, now);
   }
 }
 
-export function setKeysRotated(org: Org, actor: Actor, connector: string, rotated: boolean, now: number): void {
-  if (run("UPDATE credentials SET keys_rotated = ? WHERE org_id = ? AND connector = ?", rotated ? 1 : 0, org.id, connector)) {
-    audit(org.id, actor, "vault.keys_rotated_confirmed", { type: "credential", id: connector }, { connector, rotated }, now);
+export async function setKeysRotated(org: Org, actor: Actor, connector: string, rotated: boolean, now: number): Promise<void> {
+  if (await run("UPDATE credentials SET keys_rotated = ? WHERE org_id = ? AND connector = ?", rotated ? 1 : 0, org.id, connector)) {
+    await audit(org.id, actor, "vault.keys_rotated_confirmed", { type: "credential", id: connector }, { connector, rotated }, now);
   }
 }
 
-export function readSecret(orgId: string, connector: string): { mode: "sandbox" | "live"; apiKey: string; baseUrl?: string } | null {
-  const row = get<{ mode: "sandbox" | "live"; secret: string }>("SELECT mode, secret FROM credentials WHERE org_id = ? AND connector = ?", orgId, connector);
+export async function readSecret(orgId: string, connector: string): Promise<{ mode: "sandbox" | "live"; apiKey: string; baseUrl?: string } | null> {
+  const row = await get<{ mode: "sandbox" | "live"; secret: string }>("SELECT mode, secret FROM credentials WHERE org_id = ? AND connector = ?", orgId, connector);
   if (!row) return null;
   return { mode: row.mode, ...(JSON.parse(decryptSecret(row.secret)) as StoredSecret) };
 }
@@ -204,7 +204,7 @@ async function stripeGet(apiKey: string, path: string): Promise<Record<string, u
 
 async function loadCharge(orgId: string, secret: { mode: string; apiKey: string }, id: string): Promise<Charge> {
   if (secret.mode === "sandbox") {
-    const charge = get<Charge>("SELECT * FROM sandbox_charges WHERE org_id = ? AND id = ?", orgId, id);
+    const charge = await get<Charge>("SELECT * FROM sandbox_charges WHERE org_id = ? AND id = ?", orgId, id);
     if (!charge) throw new RequestError(`Stripe sandbox: no such charge "${id}".`, 422, "connector_error");
     return charge;
   }
@@ -223,7 +223,7 @@ async function loadCharge(orgId: string, secret: { mode: string; apiKey: string 
  * Limits and approvers then work from what Stripe says, not what the agent says.
  */
 export async function prepare(org: Org, connector: string, action: ConnectorAction, raw: Record<string, unknown>): Promise<Prepared> {
-  const secret = readSecret(org.id, connector);
+  const secret = await readSecret(org.id, connector);
   if (!secret) throw new RequestError(`The ${connector} connector is not connected in the vault.`, 422, "connector_not_connected");
   if (secret.mode === "live" && !action.liveSupported) throw new RequestError(`${action.label} is available in sandbox mode only for now.`, 422, "not_supported");
 
@@ -301,27 +301,27 @@ export async function execute(
   idempotencyKey: string,
   now: number,
 ): Promise<Record<string, unknown>> {
-  const secret = readSecret(org.id, connector);
+  const secret = await readSecret(org.id, connector);
   if (!secret) throw new Error(`The ${connector} connector is no longer connected.`);
-  return secret.mode === "sandbox" ? sandbox(org.id, connector, actionId, params, idempotencyKey, now) : live(secret, connector, actionId, params, idempotencyKey);
+  return secret.mode === "sandbox" ? await sandbox(org.id, connector, actionId, params, idempotencyKey, now) : await live(secret, connector, actionId, params, idempotencyKey);
 }
 
-function sandbox(orgId: string, connector: string, actionId: string, params: Record<string, unknown>, idempotencyKey: string, now: number): Record<string, unknown> {
-  return tx(() => {
-    const replay = get<{ response: string }>("SELECT response FROM sandbox_log WHERE org_id = ? AND connector = ? AND idempotency_key = ?", orgId, connector, idempotencyKey);
+async function sandbox(orgId: string, connector: string, actionId: string, params: Record<string, unknown>, idempotencyKey: string, now: number): Promise<Record<string, unknown>> {
+  return await tx(async () => {
+    const replay = await get<{ response: string }>("SELECT response FROM sandbox_log WHERE org_id = ? AND connector = ? AND idempotency_key = ?", orgId, connector, idempotencyKey);
     if (replay) return { ...(JSON.parse(replay.response) as Record<string, unknown>), idempotent_replay: true };
 
     let response: Record<string, unknown>;
     if (connector === "stripe" && actionId === "refund") {
-      const charge = get<Charge>("SELECT * FROM sandbox_charges WHERE org_id = ? AND id = ?", orgId, str(params.charge));
+      const charge = await get<Charge>("SELECT * FROM sandbox_charges WHERE org_id = ? AND id = ?", orgId, str(params.charge));
       if (!charge) throw new Error(`No such charge: ${str(params.charge)}`);
       const amount = params.amount as number;
       if (amount > charge.amount - charge.refunded + 1e-9) throw new Error(`Refund amount (${money(amount, charge.currency)}) is greater than the unrefunded amount on the charge (${money(charge.amount - charge.refunded, charge.currency)}).`);
-      run("UPDATE sandbox_charges SET refunded = refunded + ? WHERE org_id = ? AND id = ?", amount, orgId, charge.id);
+      await run("UPDATE sandbox_charges SET refunded = refunded + ? WHERE org_id = ? AND id = ?", amount, orgId, charge.id);
       response = { id: newId("re"), object: "refund", charge: charge.id, amount, currency: charge.currency, status: "succeeded" };
     } else if (connector === "stripe") {
       const id = newId("ch");
-      run(
+      await run(
         "INSERT INTO sandbox_charges (id, org_id, customer, customer_name, customer_email, amount, currency, description, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
         id, orgId, str(params.customer), str(params.customer), "—", params.amount as number, str(params.currency) || "usd", str(params.description) || "Charge", now,
       );
@@ -331,7 +331,7 @@ function sandbox(orgId: string, connector: string, actionId: string, params: Rec
     } else {
       response = { id: str(params.contact_id ?? params.deal_id), properties: params.properties, updatedAt: new Date(now).toISOString() };
     }
-    run(
+    await run(
       "INSERT INTO sandbox_log (id, org_id, connector, action, idempotency_key, request, response, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
       newId("sbx"), orgId, connector, actionId, idempotencyKey, JSON.stringify(params), JSON.stringify(response), now,
     );
@@ -365,6 +365,6 @@ async function live(secret: { apiKey: string }, connector: string, actionId: str
   return body;
 }
 
-export function listSandboxCharges(orgId: string): Charge[] {
-  return all<Charge>("SELECT * FROM sandbox_charges WHERE org_id = ? ORDER BY created_at DESC", orgId);
+export async function listSandboxCharges(orgId: string): Promise<Charge[]> {
+  return await all<Charge>("SELECT * FROM sandbox_charges WHERE org_id = ? ORDER BY created_at DESC", orgId);
 }

@@ -17,7 +17,7 @@ export const metadata: Metadata = { title: "Edit rule" };
 export default async function RulePage({ params }: { params: Promise<{ id: string }> }) {
   const { org, user } = await requireSession();
   const { id } = await params;
-  const rule = getRule(org.id, id);
+  const rule = await getRule(org.id, id);
   if (!rule) notFound();
   const canEdit = atLeast(user.role, "admin");
   return (
@@ -39,7 +39,7 @@ export default async function RulePage({ params }: { params: Promise<{ id: strin
           ) : undefined
         }
       />
-      <RuleBuilder rule={rule} agents={listAgents(org.id).map((a) => ({ id: a.id, name: a.name }))} timeZone={org.settings.timezone} canEdit={canEdit} />
+      <RuleBuilder rule={rule} agents={(await listAgents(org.id)).map((a) => ({ id: a.id, name: a.name }))} timeZone={org.settings.timezone} canEdit={canEdit} />
     </>
   );
 }

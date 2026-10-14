@@ -5,12 +5,12 @@ import { getEvent } from "@/server/events";
 
 // GET /v1/approvals/{id} — the agent polls this while it waits for a person.
 export const GET = route(async (request, { params }: { params: Promise<{ id: string }> }) => {
-  const auth = agentAuth(request);
+  const auth = await agentAuth(request);
   const { id } = await params;
-  expireOverdue(auth.org, Date.now());
-  const approval = getApproval(auth.org.id, id);
+  await expireOverdue(auth.org, Date.now());
+  const approval = await getApproval(auth.org.id, id);
   if (!approval || approval.agent_id !== auth.agent.id) throw new RequestError("Approval not found for this agent.", 404, "not_found");
-  const event = getEvent(auth.org.id, approval.event_id)!;
+  const event = (await getEvent(auth.org.id, approval.event_id))!;
   return Response.json({
     approval_id: approval.id,
     status: approval.status,

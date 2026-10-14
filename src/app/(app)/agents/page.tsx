@@ -13,9 +13,9 @@ export const metadata: Metadata = { title: "Agents" };
 
 export default async function AgentsPage() {
   const { org, user, now } = await requireSession();
-  const stats = agentStats(org, now);
-  const cov = new Map(coverage(org).agents.map((a) => [a.agent.id, a.share]));
-  const owners = new Map(listUsers(org.id).map((u) => [u.id, u.name]));
+  const stats = await agentStats(org, now);
+  const cov = new Map((await coverage(org)).agents.map((a) => [a.agent.id, a.share]));
+  const owners = new Map((await listUsers(org.id)).map((u) => [u.id, u.name]));
   const canEdit = atLeast(user.role, "admin");
 
   return (

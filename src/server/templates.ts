@@ -74,13 +74,13 @@ export async function loadTemplatePacks(): Promise<PackCatalog> {
 
 export async function installedTemplates(orgId: string): Promise<Set<string>> {
   const { packs } = await loadTemplatePacks();
-  return installedTemplatesAmong(orgId, packs);
+  return await installedTemplatesAmong(orgId, packs);
 }
 
-function installedTemplatesAmong(orgId: string, packs: TemplatePack[]): Set<string> {
+async function installedTemplatesAmong(orgId: string, packs: TemplatePack[]): Promise<Set<string>> {
   const ids = new Set<string>();
   for (const pack of packs) {
-    if (get("SELECT 1 AS x FROM rules WHERE org_id = ? AND template = ? LIMIT 1", orgId, pack.id)) ids.add(pack.id);
+    if (await get("SELECT 1 AS x FROM rules WHERE org_id = ? AND template = ? LIMIT 1", orgId, pack.id)) ids.add(pack.id);
   }
   return ids;
 }
@@ -91,11 +91,11 @@ export async function installTemplate(org: Org, actor: Actor, packId: string, op
   const pack = packs.find((p) => p.id === packId);
   if (!pack) throw new Error("Unknown template.");
   // Nothing below awaits, so the check and the inserts cannot be interleaved with another request.
-  tx(() => {
-    if (installedTemplatesAmong(org.id, packs).has(packId)) throw new Error("This template is already installed.");
-    for (const rule of pack.rules) createRule(org, actor, { ...rule, agentId: opts.agentId, template: pack.id, enabled: opts.enable }, now);
-    for (const limit of pack.limits) createLimit(org, actor, { ...limit, agentId: opts.agentId, template: pack.id }, now);
-    audit(org.id, actor, "template.installed", { type: "template", id: pack.id }, { name: pack.name, rules: pack.rules.length, limits: pack.limits.length }, now);
+  await tx(async () => {
+    if ((await installedTemplatesAmong(org.id, packs)).has(packId)) throw new Error("This template is already installed.");
+    for (const rule of pack.rules) await createRule(org, actor, { ...rule, agentId: opts.agentId, template: pack.id, enabled: opts.enable }, now);
+    for (const limit of pack.limits) await createLimit(org, actor, { ...limit, agentId: opts.agentId, template: pack.id }, now);
+    await audit(org.id, actor, "template.installed", { type: "template", id: pack.id }, { name: pack.name, rules: pack.rules.length, limits: pack.limits.length }, now);
   });
 }
 
@@ -104,10 +104,10 @@ export async function uninstallTemplate(org: Org, actor: Actor, packId: string, 
   const { packs } = await loadTemplatePacks();
   const pack = packs.find((p) => p.id === packId);
   if (!pack) throw new Error("Unknown template.");
-  tx(() => {
-    const rules = run("DELETE FROM rules WHERE org_id = ? AND template = ?", org.id, packId);
-    const limits = run("DELETE FROM limits WHERE org_id = ? AND template = ?", org.id, packId);
+  await tx(async () => {
+    const rules = await run("DELETE FROM rules WHERE org_id = ? AND template = ?", org.id, packId);
+    const limits = await run("DELETE FROM limits WHERE org_id = ? AND template = ?", org.id, packId);
     if (!rules && !limits) throw new Error("This template is not installed.");
-    audit(org.id, actor, "template.uninstalled", { type: "template", id: pack.id }, { name: pack.name, rules_removed: rules, limits_removed: limits }, now);
+    await audit(org.id, actor, "template.uninstalled", { type: "template", id: pack.id }, { name: pack.name, rules_removed: rules, limits_removed: limits }, now);
   });
 }

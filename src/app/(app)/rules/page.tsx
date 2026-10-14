@@ -24,8 +24,8 @@ const EFFECT: Record<RuleEffect, { tone: "good" | "warn" | "danger"; label: stri
 
 export default async function RulesPage() {
   const { org, user } = await requireSession();
-  const rules = listRules(org.id);
-  const agents = listAgents(org.id);
+  const rules = await listRules(org.id);
+  const agents = await listAgents(org.id);
   const agentName = new Map(agents.map((a) => [a.id, a.name]));
   const catalog = await loadTemplatePacks();
   const installed = await installedTemplates(org.id);

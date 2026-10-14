@@ -31,7 +31,7 @@ function summary(details: Record<string, unknown>): string {
     .join(" · ");
 }
 
-function targetHref(type: string, id: string | null): string | null {
+async function targetHref(type: string, id: string | null): Promise<string | null> {
   if (!id) return null;
   if (type === "event") return `/activity/${id}`;
   if (type === "approval") return `/approvals/${id}`;
@@ -45,9 +45,10 @@ export default async function AuditPage({ searchParams }: { searchParams: Promis
   const sp = await searchParams;
   const page = Math.max(1, Number(sp.page) || 1);
   const group = GROUPS.some(([g]) => g === sp.group) ? (sp.group ?? "") : "";
-  const integrity = verifyAudit(org.id);
-  const total = countAudit(org.id);
-  const entries = listAudit(org.id, { limit: PAGE, offset: (page - 1) * PAGE, action: group || undefined });
+  const integrity = await verifyAudit(org.id);
+  const total = await countAudit(org.id);
+  const entries = await listAudit(org.id, { limit: PAGE, offset: (page - 1) * PAGE, action: group || undefined });
+  const rows = await Promise.all(entries.map(async (e) => ({ e, link: await targetHref(e.target_type, e.target_id) })));
   const tz = org.settings.timezone;
   const canExport = atLeast(user.role, "admin");
   const href = (p: number, g = group) => `/audit?${new URLSearchParams({ ...(g ? { group: g } : {}), ...(p > 1 ? { page: String(p) } : {}) }).toString()}`;
@@ -106,8 +107,7 @@ export default async function AuditPage({ searchParams }: { searchParams: Promis
                   </tr>
                 </thead>
                 <tbody>
-                  {entries.map((e) => {
-                    const link = targetHref(e.target_type, e.target_id);
+                  {rows.map(({ e, link }) => {
                     const Icon = e.actor_type === "user" ? User : e.actor_type === "agent" ? Bot : Workflow;
                     return (
                       <tr key={e.seq}>
