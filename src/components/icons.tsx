@@ -78,6 +78,7 @@ export const CircleHelp = make("Unknown", <><circle cx="12" cy="12" r="9" /><pat
 export const CircleDashed = make("Not set", <circle cx="12" cy="12" r="9" strokeDasharray="3.200 3.600" />);
 export const Radio = make("Live", <><circle cx="12" cy="12" r="2" /><path d="M7.500 7.500a6.400 6.400 0 0 0 0 9M16.500 7.500a6.400 6.400 0 0 1 0 9M4.500 4.500a10.500 10.500 0 0 0 0 15M19.500 4.500a10.500 10.500 0 0 1 0 15" /></>);
 export const Eye = make("Observe", <><path d="M2.500 12S6 5.500 12 5.500 21.500 12 21.500 12 18 18.500 12 18.500 2.500 12 2.500 12Z" /><circle cx="12" cy="12" r="3" /></>);
+export const EyeOff = make("Hide", <><path d="M3 3l18 18" /><path d="M10.6 10.6a2 2 0 0 0 2.8 2.8" /><path d="M9.4 5.6A9 9 0 0 1 12 5.5c6 0 9.5 6.5 9.5 6.5a17 17 0 0 1-3.2 3.6M6.7 6.7C4.8 8 3.4 10 2.5 12S6 18.5 12 18.5c1.5 0 2.9-.3 4.1-.9" /></>);
 export const Lock = make("Locked", <><rect x="5" y="10.500" width="14" height="10" rx="2.500" /><path d="M8 10.500V8a4 4 0 0 1 8 0v2.500M12 14.500V17" /></>);
 export const Fingerprint = make("Fingerprint", <path d="M4.500 9.500a8 8 0 0 1 15 0M7 11a5 5 0 0 1 10 0v2.500M12 11v4.500c0 2-.7 3.500-1.700 5M9 12v3c0 1.800-.6 3.300-1.500 4.500M15 13v2.500c0 1.500-.3 2.700-.8 3.800" />);
 export const Clock = make("Waiting", <><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></>);

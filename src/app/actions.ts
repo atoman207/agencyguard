@@ -16,7 +16,8 @@ import { ensureSeeded } from "@/server/seed";
 import { updateSettings } from "@/server/settings";
 import { installTemplate, uninstallTemplate } from "@/server/templates";
 import { classifyTool, declareTool, deleteTool, removeAgentTool, setToolPermission } from "@/server/tools";
-import { addMember, changeRole, checkPassword, createApiKey, removeMember, revokeApiKey, signUp, userActor } from "@/server/users";
+import { assertAvatarFile, saveAvatarFile } from "@/server/avatar-upload";
+import { addMember, changeRole, checkPassword, createApiKey, removeMember, revokeApiKey, setUserAvatar, signUp, userActor } from "@/server/users";
 import { deleteCredential, saveCredential, setKeysRotated } from "@/server/vault";
 import { audit } from "@/server/audit";
 import type { AgentMode, AgentStatus, Connection, Environment, LimitKind, LimitPeriod, LimitScope, Role, RuleEffect, ToolPermission } from "@/lib/types";
@@ -58,7 +59,17 @@ export async function loginAction(_: ActionState, form: FormData): Promise<Actio
 export async function signupAction(_: ActionState, form: FormData): Promise<ActionState> {
   try {
     await ensureSeeded();
-    const user = signUp({ orgName: str(form, "organization"), name: str(form, "name"), email: str(form, "email"), password: String(form.get("password") ?? "") }, Date.now());
+    const password = String(form.get("password") ?? "");
+    const confirm = String(form.get("password_confirm") ?? "");
+    if (password !== confirm) throw new Error("Passwords do not match.");
+    const avatar = form.get("avatar");
+    const avatarFile = avatar instanceof File && avatar.size > 0 ? avatar : null;
+    if (avatarFile) assertAvatarFile(avatarFile);
+    const user = signUp(
+      { orgName: str(form, "organization"), name: str(form, "name"), email: str(form, "email"), password },
+      Date.now(),
+    );
+    if (avatarFile) setUserAvatar(user.id, await saveAvatarFile(user.id, avatarFile));
     await startSession(user.id);
   } catch (err) {
     return fail(err);

@@ -23,6 +23,7 @@ CREATE TABLE IF NOT EXISTS users (
   name TEXT NOT NULL,
   password_hash TEXT NOT NULL,
   role TEXT NOT NULL,
+  avatar TEXT,
   created_at INTEGER NOT NULL
 );
 CREATE TABLE IF NOT EXISTS sessions (
@@ -289,6 +290,12 @@ export function db(): DatabaseSync {
     const conn = new DatabaseSync(path.join(DATA_DIR, "agentguard.db"));
     conn.exec("PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;");
     conn.exec(SCHEMA);
+    // Older local databases were created before avatar existed.
+    try {
+      conn.exec("ALTER TABLE users ADD COLUMN avatar TEXT");
+    } catch {
+      /* column already present */
+    }
     g.__agDb = conn;
     g.__agStatements = new Map();
     g.__agTxDepth = 0;

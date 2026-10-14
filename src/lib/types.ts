@@ -75,6 +75,8 @@ export interface User {
   email: string;
   name: string;
   role: Role;
+  /** Public path like `/avatars/usr_….jpg`, or null for the default mark. */
+  avatar: string | null;
   created_at: number;
 }
 

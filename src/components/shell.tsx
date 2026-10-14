@@ -6,8 +6,6 @@ import { Suspense, useState, type ReactNode } from "react";
 import {
   Bot, FlaskConical, Gauge, Hand, KeyRound, LayoutDashboard, ListChecks, Menu, MessageSquareWarning, Plug, Radar, ScrollText, Settings, ShieldCheck, Wrench, X,
 } from "@/components/icons";
-import { Wordmark } from "./brand";
-
 interface Item {
   href: string;
   label: string;
@@ -100,25 +98,20 @@ export function Sidebar({ badge, footer }: { badge: ReactNode; footer: ReactNode
   const close = () => setOpen(false);
   return (
     <>
-      {/* phone and tablet: a top bar with a menu button */}
-      <div className="sticky top-0 z-30 flex items-center justify-between border-b border-line bg-white px-4 py-3 lg:hidden">
-        <Link href="/overview" aria-label="AgentGuard overview">
-          <Wordmark size={30} />
-        </Link>
+      {/* phone and tablet: menu under the site header (logo lives in the header) */}
+      <div className="sticky top-16 z-30 flex items-center justify-end border-b border-line bg-white px-4 py-2 lg:hidden">
         <button type="button" onClick={() => setOpen(true)} className="rounded-lg p-2 text-ink-soft hover:bg-paper-deep" aria-label="Open menu">
           <Menu className="h-5 w-5" />
         </button>
       </div>
-      {open && <button type="button" aria-label="Close menu" className="fixed inset-0 z-40 bg-ink/30 lg:hidden" onClick={close} />}
+      {open && <button type="button" aria-label="Close menu" className="fixed inset-0 top-16 z-40 bg-ink/30 lg:hidden" onClick={close} />}
 
       <aside
-        className={`fixed inset-y-0 left-0 z-50 flex w-64 flex-col overflow-hidden border-r border-line bg-white transition-transform duration-200 lg:translate-x-0 ${open ? "translate-x-0" : "-translate-x-full"}`}
+        className={`fixed bottom-0 left-0 top-16 z-50 flex w-64 flex-col overflow-hidden border-r border-line bg-white transition-transform duration-200 lg:translate-x-0 ${open ? "translate-x-0" : "-translate-x-full"}`}
       >
-        <div className="flex items-center justify-between px-5 pb-4 pt-5">
-          <Link href="/overview" onClick={close} aria-label="AgentGuard overview">
-            <Wordmark />
-          </Link>
-          <button type="button" onClick={close} className="rounded-lg p-1.5 text-ink-soft hover:bg-paper-deep lg:hidden" aria-label="Close menu">
+        <div className="flex items-center justify-between border-b border-line px-5 py-3 lg:hidden">
+          <span className="font-display text-sm font-semibold text-himal-900">Menu</span>
+          <button type="button" onClick={close} className="rounded-lg p-1.5 text-ink-soft hover:bg-paper-deep" aria-label="Close menu">
             <X className="h-5 w-5" />
           </button>
         </div>

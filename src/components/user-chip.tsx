@@ -9,7 +9,7 @@ export function UserChip({
   size = 36,
   subtitle,
 }: {
-  user: { name: string; role: Role; email?: string };
+  user: { name: string; role: Role; email?: string; avatar?: string | null };
   href?: string | null;
   size?: number;
   subtitle?: string;

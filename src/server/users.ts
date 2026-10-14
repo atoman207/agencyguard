@@ -5,7 +5,7 @@ import { audit, type Actor } from "./audit";
 import { DEFAULT_SETTINGS } from "./orgs";
 import type { Org, Role, User } from "@/lib/types";
 
-const USER_COLUMNS = "id, org_id, email, name, role, created_at";
+const USER_COLUMNS = "id, org_id, email, name, role, avatar, created_at";
 export const ROLES: Role[] = ["owner", "admin", "approver", "viewer"];
 const RANK: Record<Role, number> = { viewer: 0, approver: 1, admin: 2, owner: 3 };
 
@@ -30,17 +30,30 @@ function validate(email: string, password: string, name: string): string {
 }
 
 /** Creates a new workspace with its first user as owner. */
-export function signUp(input: { orgName: string; name: string; email: string; password: string }, now: number): User {
+export function signUp(input: { orgName: string; name: string; email: string; password: string; avatar?: string | null }, now: number): User {
   const email = validate(input.email, input.password, input.name);
   if (!input.orgName.trim()) throw new Error("Enter a workspace name.");
   const orgId = newId("org");
   const userId = newId("usr");
   tx(() => {
     run("INSERT INTO organizations (id, name, settings, created_at) VALUES (?, ?, ?, ?)", orgId, input.orgName.trim(), JSON.stringify(DEFAULT_SETTINGS), now);
-    run("INSERT INTO users (id, org_id, email, name, password_hash, role, created_at) VALUES (?, ?, ?, ?, ?, 'owner', ?)", userId, orgId, email, input.name.trim(), hashPassword(input.password), now);
+    run(
+      "INSERT INTO users (id, org_id, email, name, password_hash, role, avatar, created_at) VALUES (?, ?, ?, ?, ?, 'owner', ?, ?)",
+      userId,
+      orgId,
+      email,
+      input.name.trim(),
+      hashPassword(input.password),
+      input.avatar ?? null,
+      now,
+    );
     audit(orgId, { type: "user", id: userId, label: input.name.trim() }, "organization.created", { type: "organization", id: orgId }, { name: input.orgName.trim() }, now);
   });
   return getUser(userId)!;
+}
+
+export function setUserAvatar(userId: string, avatar: string | null): void {
+  run("UPDATE users SET avatar = ? WHERE id = ?", avatar, userId);
 }
 
 /**
@@ -51,7 +64,7 @@ export function addMember(org: Org, actor: Actor, input: { name: string; email: 
   if (!ROLES.includes(input.role)) throw new Error("Choose a role.");
   const email = validate(input.email, input.password, input.name);
   const id = newId("usr");
-  run("INSERT INTO users (id, org_id, email, name, password_hash, role, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)", id, org.id, email, input.name.trim(), hashPassword(input.password), input.role, now);
+  run("INSERT INTO users (id, org_id, email, name, password_hash, role, avatar, created_at) VALUES (?, ?, ?, ?, ?, ?, NULL, ?)", id, org.id, email, input.name.trim(), hashPassword(input.password), input.role, now);
   audit(org.id, actor, "member.added", { type: "user", id }, { name: input.name.trim(), email, role: input.role }, now);
   return getUser(id)!;
 }

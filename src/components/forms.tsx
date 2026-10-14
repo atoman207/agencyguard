@@ -39,6 +39,7 @@ export function ActionForm({
   resetOnSuccess,
   result,
   quiet,
+  encType,
 }: {
   action: FormAction;
   children: ReactNode;
@@ -48,6 +49,7 @@ export function ActionForm({
   result?: (data: Record<string, unknown>) => ReactNode;
   /** Hide the success message; errors always show. */
   quiet?: boolean;
+  encType?: string;
 }) {
   const [state, formAction, pending] = useActionState(action, null);
   const ref = useRef<HTMLFormElement>(null);
@@ -56,7 +58,7 @@ export function ActionForm({
   }, [state, resetOnSuccess]);
 
   return (
-    <form ref={ref} action={formAction} onSubmit={submitTo(formAction)} className={className}>
+    <form ref={ref} action={formAction} onSubmit={submitTo(formAction)} className={className} encType={encType}>
       <PendingContext value={pending}>{children}</PendingContext>
       {state && !state.ok && state.message && (
         <p role="alert" className="mt-3 flex items-start gap-2 rounded-lg border border-simrik-200 bg-simrik-50 px-3 py-2 text-sm font-medium text-simrik-800">

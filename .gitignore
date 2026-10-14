@@ -42,3 +42,7 @@ next-env.d.ts
 
 # AgentGuard local data: SQLite database and the development vault key
 /.data/
+
+# Uploaded user avatars (keep the folder)
+/public/avatars/*
+!/public/avatars/.gitkeep
